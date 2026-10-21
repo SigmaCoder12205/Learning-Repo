@@ -1,1 +1,18 @@
-Main Pc / Laptop Token: 
+git status: Shows what needs commiting and what was changed and what is staged 
+git add: adds a file or files to be staged (ready to be commited) 
+git commit: commits your work locally not to the web yet
+git push: pushes work to the web
+git init: makes a .git and makes the folder get ready for git things
+git branch -M name: changes name of a branch 
+git clone HTTPS: pulls all the files from a git repo 
+git pull: pulls the files from the web
+
+Starting a git repo 
+
+1. git init 
+2. git add .
+3. git commit -m ""
+4. git branch -M main  
+5. git remote add origin 
+6. git remote add origin HTTPSORWHATEVER
+7. git push -u origin main 
