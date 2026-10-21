@@ -1,0 +1,2524 @@
+// run and compile C++ code 
+g++ -Wall -O2 main.cpp -o main
+./main to run
+
+
+C++ tutorial for beginners 
+
+Code
+
+ #include <iostream>
+
+ int main() {
+
+    //  This is a comment 
+    /*
+    This is a muti line comment thingy
+    */
+
+    std::cout << "I like Pizza!" << std::endl;
+    std::cout << "It's really good" << std::endl;
+    return 0;
+ }
+
+Comments: 
+
+    std does not mean sexually transmitted diesases it means standard 
+    cout is character output 
+
+
+Variables and Data types 
+
+#include <iostream>
+
+int main() {
+   // ints are like 1,2,3,4...
+   int age = 21;
+   int year = 2026;
+   int days = 7;
+
+   // double like 1.1, 2.2, 3.6, 7.4...
+   double price = 10.99;
+   double gpa = 2.5;
+   double temperature = 25.1;
+
+   //std::cout << price;
+
+   // char are like a, b, c, d, e, f, g not whole strings
+   char grade = 'A';
+   char inital = 'B';
+   char currency = '$';
+
+   // booleans like true or false 
+   bool student = false;
+   bool power = true;
+   bool forSale = true;
+
+   // strings like whole setances "My name is Archer" etc
+   std::string name = "Archer";
+   std::string day = "Friday";
+   std::string food = "pizza";
+   std::string address = "123 Fake Street";
+
+   std::cout << "Hello " << name << std::endl;
+   std::cout << "You are " << age << " Years old" << std::endl;
+
+   return 0;
+}
+
+Comments: 
+   Why is typing for a string data tpye SO HARD "std::string"
+
+
+
+
+Const 
+
+Bro Code Comments 
+The const keyword specifies that a variable value is constant 
+tells the compiler to prevent anything from modifying it 
+(read only)
+
+Code
+
+#include <iostream>
+
+int main(){
+   const double PI = 3.14159;
+   const int LIGHT_SPEED = 299792458;
+   const int WIDTH = 1920;
+   const int HEIGHT = 1080;
+
+   return 0;
+}
+
+Comments 
+Like final in java
+
+
+Namespace 
+
+Bro Code Comments
+Namespace = provides a solution for preventing name conflicts 
+            in large projects. Each entity needs a unique name.
+            A namespace allows for identically name entities 
+            as long as the namespaces are different.
+
+
+different code
+
+How to make a namespace, you don't have to use namespace inside the main function 
+
+namespace{
+   ...
+}
+
+int main(){
+
+
+   return 0;
+}
+
+Comments 
+   Namespaces are cool
+
+
+Typedef and type aliases
+
+Bro Code Comments
+   typedef = reserved keyword used to create an additional name
+             (alias) for another data type.
+             New identifier for an existing type 
+             Helps with readability and reduces typos
+             Use when there is a clear benefit 
+             Replaced with 'using' (work better with templates)
+
+
+Code 
+
+#include <iostream>
+
+//typedef std::vector<std::pair<std::string, int>> pairlist_t
+//typedef std::string text_t;
+//typedef int number_t;
+using text_t = std::string;
+using number_t = int;
+
+int main(){
+   
+   text_t firstName = "Archer";
+   number_t age = 21;
+
+   std::cout << firstName << std::endl;
+   std::cout << age << std::endl;
+
+   return 0;
+}
+
+Comments 
+
+Use using most of the time unless there's a reason to use typedef 
+
+
+Arithmetic Operators
+
+Bro Code's Comments
+
+arithmetic operators = returns the result of a specfic 
+                       arithmetic operation (+ - * /)
+
+Code 
+
+#include <iostream>
+
+int main(){
+   int students = 6 - (5 + 4) * 3 / 2;
+
+   //students += 2;
+   //students++;
+   //students -= 2;
+   //students--;
+   //students *= 2;
+   //students /= 3;
+   //int remainder = students % 3;
+
+   std::cout << students << std::endl;
+
+
+   return 0;
+}
+
+Comments 
+   Follow BODMAS
+   and this is so simple
+
+
+Type Conversion 
+
+Bro Coes Comments
+
+type conversion = conversion a value of one data type to another
+                  Implicit = automatic 
+                  Explicit = Precede value with a new data type (int)
+
+Code 
+
+#include <iostream>
+
+int main(){
+   
+   int correct = 8;
+   int questions = 10;
+
+   double percentage = correct / (double) questions * 100;
+   
+   std::cout << percentage << "%" << std::endl;
+
+   return 0;
+}
+
+Comments
+   like how in python to convert you use datatype(anotherdatatype)
+   simple
+
+
+User Input
+
+Bro Codes Comments 
+   cout << (insertion operator)
+   cin >> (extraction operator)
+
+Code
+
+#include <iostream>
+
+int main(){
+   std::string name;
+   int age;
+ 
+   std::cout << "What's your age?: ";
+   std::cin >> age;
+
+   std::cout << "What's your full name?: ";
+   std::getline(std::cin >> std::ws, name);
+
+   std::cout << "Hello " << name << std::endl;
+   std::cout << "You are " << age << " years old" << std::endl;
+
+   return 0;
+}
+
+
+Comments 
+   use getline(std::cin, std::ws, variable) for string that might have spaces 
+   otherwise just use std::cin
+
+
+Useful Related Math functions
+
+1. std::max(); pass in the numbers you want to get the biggest number out of them 
+2. std::min(); same thing but get's smallest number out of passed arguments 
+3. pow(); found in the cmath libary and gets the power of the 2 given arguments
+4. sqrt(); found in the cmath libary and get's the sqaure root of a given argument 
+5. abs(); found in the cmath libary and turns a neagtive number into a postive number
+6. round(); found in the cmath libary and rounds a number 
+7. ceil(); found in the cmath libary and rounds a number up 
+8. floor(); found in the cmath libary and will always round down a number
+
+Code 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   double x = 3.14;
+   double y = 4;
+   double z;
+
+   //z = std::max(x, y);
+   //z = std::min(x, y);
+   //z = pow(2, 3);
+   //z = sqrt(9);
+   //z = abs(-3);
+   //z = round(x);
+   //z = ceil(x);
+   //z = floor(x);
+
+   std::cout << z << std::endl;
+   return 0;
+}
+
+Comments
+
+I don't know
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+
+                                                   Hypotenuse calculator practice program 
+
+Code 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   double a;
+   double b;
+   double c;
+
+   std::cout << "Enter side a: ";
+   std::cin >> a;
+
+   std::cout << "Enter side b: ";
+   std::cin >> b;
+
+   c = sqrt(pow(a, 2) + pow(b, 2));
+
+   std::cout << "The hypotenuse is: " << c << std::endl;
+
+   return 0;
+}
+
+How hard was it?: Easy as shit
+Do you understand the code: Hell yeah I do
+Enjoyment: Lovin it
+
+If statements 
+
+Bro Code Comments
+
+if statements = do something if a condition is true.
+                if not, then don't do it.
+
+Code
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   int age;
+   
+   std::cout << "Enter your age: ";
+   std::cin >> age;
+
+   if(age >= 100){
+      std::cout << "You are too old to enter this site!" << std::endl;
+   }
+   else if(age < 0){
+      std::cout << "You haven't been born yet!" << std::endl;
+   }
+   else if(age >= 18){
+      std::cout << "Welcome to the site!" << std::endl;
+   }
+   else{
+      std::cout << "You are not old enough to enter!" << std::endl;
+   }
+
+   return 0;
+}
+
+
+Comments
+   Just like Java if statements 
+   be careful of order, if it's not showing what you expected to show maybe check the order 
+
+Switch-case statements 
+
+Bro Code Comments
+   switch = alternative to using many "else if" statements 
+            compare one value against matching cases 
+
+Code
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   char grade;
+   std::cout << "What letter grade?: ";
+   std::cin >> grade;
+   
+   switch (grade)
+   {
+   case 'A':
+      std::cout << "You did great!" << std::endl;
+      break;
+   case 'B':
+      std::cout << "You did good!" << std::endl;
+   case 'C':
+      std::cout << "You did okay" << std::endl;
+   case 'D':
+      std::cout << "You did not do good" << std::endl;      
+   case 'F':
+      std::cout << "YOU FAILED!" << std::endl;  
+      break;
+   default:
+      std::cout << "please only enter in a letter grade (A-F)" << std::endl;
+      break;
+   }
+
+   return 0;
+}
+
+
+Comments 
+   Almost forgot to add this in uh, idk but these things are exactly like java
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                         Console Calculator Program
+
+Code
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   char op; 
+   double num1;
+   double num2;
+   double result;
+
+   std::cout << "************ CALCULATOR ************" << std::endl;
+
+   std::cout << "Enter either (+ - * /): ";
+   std::cin >> op;
+
+   std::cout << "Enter #1: ";
+   std::cin >> num1;
+
+   std::cout << "Enter #2: ";
+   std::cin >> num2;
+
+   switch(op){
+      case '+': 
+         result = num1 + num2;
+         std::cout << "result: " << result << std::endl;
+         break;
+      case '-': 
+         result = num1 - num2;
+         std::cout << "result: " << result << std::endl;
+         break;
+      case '*': 
+         result = num1 * num2;
+         std::cout << "result: " << result << std::endl;
+         break;
+      case '/': 
+         result = num1 / num2;
+         std::cout << "result: " << result << std::endl;
+         break;
+      default:
+         std::cout << "That wasn't vaild response" << std::endl;
+         break;
+   }
+
+   std::cout << "************************************" << std::endl;
+   return 0;
+}
+
+How hard was it?: Darn easy
+Do you understand the code: Of course
+Enjoyment: 90.9% Lovin it
+
+Ternary Operator
+
+Bro Code Comments
+
+ternary operator ?: = replacement to an if/else statement 
+                      condition ? experssion 1 : experssion 2;
+
+Code
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   //int grade = 50;
+   //grade >= 65 ? std::cout << "You pass!" << std::endl : std::cout << "You fail!" << std::endl
+
+   //int number = 8;
+   //number % 2 == 1 ? std::cout << "ODD" << std::endl : std::cout << "EVEN" << std::endl;
+
+   bool hungry = true;
+
+   //hungry? std::cout << "You are hungry" << std::endl : std::cout << "You are full" << std::endl;
+   std::cout << (hungry ? "You are hungry" : "You are full") << std::endl;
+
+   return 0;
+}
+
+Comments 
+
+   You have 2 differnt ways of writing it one of the ways is 
+      condition ? do this : do this if that is false
+      
+      or if outputting something based on a bool do this
+
+      std::cout << (condition ? output this : output this is if that is false) << std::endl;
+
+Logical Operators
+
+Bro Codes Comments
+   && = check if two conditions are true                          AND
+   || = check if at least one of two conditions is true           OR
+   ! = reverses the logical state of its operand                  Not
+
+Code
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   int temp; 
+   bool sunny = false;
+
+   std::cout << "Enter the temperature: ";
+   std::cin >> temp; 
+
+   if(temp <= 0 || temp >= 30){
+      std::cout << "The temperature is bad" << std::endl;
+   }
+   else{
+      std::cout << "The temperature is good" << std::endl;
+   }
+
+   if(!sunny){
+      std::cout << "It is clody outside" << std::endl;
+   }
+   else{
+      std::cout << "It is sunny outside" << std::endl;
+   }
+
+   return 0;
+}
+
+Comments
+   simple, a lot of the code is simmilar to other code in other programming lanagues 
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                      Temperature conversion program 
+
+Code 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   double temp;
+   char unit;
+
+   std::cout << "********** Temperature Conversion **********\n";
+   std::cout << "F = Fahrenheit\n";
+   std::cout << "C = Celsius\n";
+   std::cout << "What unit would you like to convert to: ";
+   std::cin >> unit;
+
+   if(unit == 'F' || unit == 'f'){
+      std::cout << "Enter the temperature in Celsius: ";
+      std::cin >> temp;
+
+      temp = (1.8 * temp) + 32.0;
+      std::cout << "Temperature is: " << temp << "F\n";
+   }
+   else if(unit == 'C' || unit == 'c'){
+      std::cout << "Enter the temperature in Fahrenheit: ";
+      std::cin >> temp; 
+
+      temp = (temp - 32) / 1.8;
+      std::cout << "Temperature is: " << temp << "C\n";
+   }
+   else{
+      std::cout << "Please enter in only C or F\n";
+   }
+
+   std::cout << "********************************************\n";
+
+   return 0;
+}
+
+How hard was it?: Still easy
+Do you understand the code: Defentily 
+Enjoyment: 100% lovin it 
+
+Useful String Methods
+
+1. .length()                                       - Get's the length of the string so Archer would be 6
+2. .empty()                                        - returns if a string is empty or not
+3. .clear()                                        - clears your name, so if you clear then print it will output nothing
+4. .append()                                       - adds something onto the name 
+5. .at(index of what character you want)           - get's a letter at the index you provide it 
+6. .insert(index, what you want to replace with)   - give it an index and and a character and it'll insert into the string
+7. .find(character you want to find )              - returns the first position of the character your trying to find
+8. .erase(beginning index, ending index)           - beginning index is for the character you want to start at and
+                                                     ending index is for the character you want to end and it'll replace
+                                                     every letter inbetween those indexs
+
+Comments
+   I don't know
+
+While loops
+
+Code 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   std::string name;
+
+   while(name.empty()){
+      std::cout << "Enter your name: ";
+      std::getline(std::cin, name);
+   }
+
+   std::cout << "Hello " << name << std::endl;
+
+   return 0;
+}
+
+Comments 
+   Just like Java
+
+
+Do While Loops 
+
+Bro Code Comments
+   do while loop = do some block of code first,
+                   THEN repeat again if condition is true
+
+Code 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   
+   int number;
+
+   do{
+      std::cout << "Enter a positive #: ";
+      std::cin >> number;
+   }while(number < 0);
+
+   std::cout << "The # is: " << number << std::endl;
+
+   return 0;
+}
+
+Comments                                                                                                          
+   Cool 
+
+For Loops 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   for(int i = 10; i >= 0 ; i-2){
+      std::cout << i << std::endl;
+   }
+         
+   std::cout << "HAPPY NEW YEAR"<< std::endl;
+   
+   return 0;
+}
+
+Code 
+
+Just like java
+
+Break and Continue
+
+Bro Code Comments
+
+break = break out of a loop
+continue = skip current iteration
+
+Code
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   for(int i = 1; i <= 20; i++){
+      if(i == 13){
+         continue;
+      }
+      std::cout << i << std::endl;
+   }
+
+   
+   return 0;
+}
+
+Comments 
+
+   Just like Java
+
+Nested Loops
+
+Code 
+
+#include <iostream>
+#include <cmath>
+
+int main(){
+   int rows;
+   int columns;
+   char symbol;
+
+   std::cout << "How many rows: ";
+   std::cin >> rows;
+   std::cout << "How many columns: ";
+   std::cin >> columns;
+   std::cout << "Enter a symbols to use: ";
+   std::cin >> symbol;
+
+
+   for(int i = 1; i<=rows; i++){
+   
+      for(int j = 1; j<=columns; j++){
+         
+         std::cout << symbol;
+      }
+      std::cout << std::endl;
+   }
+
+   
+   return 0;
+}
+
+Comments 
+   We ended up doing a mini project
+
+Random Number Generator
+
+Bro Code Comments
+pseudo-random = Not truly random (but close)
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   srand(time(NULL));
+
+   int num1 = (rand() % 6) + 1;
+   int num2 = (rand() % 6) + 1;
+   int num3 = (rand() % 6) + 1;
+
+   std::cout << num1 << std::endl;
+   std::cout << num2 << std::endl;
+   std::cout << num3 << std::endl;
+
+   return 0;
+}
+
+Comments 
+
+   Does this mean all lanagues can't truly randomly generate numbers?
+
+
+Random Event Generator
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   srand(time(0));
+   int randNum = rand() % 5 + 1;
+
+   switch (randNum){
+   case 1:
+      std::cout << "You win a bumper sticker" << std::endl;
+      break;
+   case 2:
+      std::cout << "You win a T-Shirt" << std::endl;
+      break;
+   case 3:
+      std::cout << "You win a free lunch" << std::endl;
+      break;
+   case 4:
+      std::cout << "You win a Gift Card" << std::endl;
+      break;
+   case 5:
+      std::cout << "You win a Concert ticket" << std::endl;   
+      break;
+
+   
+   }
+
+   return 0;
+}
+
+Comments 
+   Nothing new learnt just building ontop of random generators
+
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                             Number Guesing Game
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   int num;
+   int guess;
+   int tries = 0;
+
+   srand(time(NULL));
+   num = (rand() % 100) + 1;
+   
+   std::cout << "************* NUMBER GUESSING GAME *************" << std::endl;
+   
+
+   do{
+      std::cout << "Enter a guess between (1-100): ";
+      std::cin >> guess;
+      tries++;
+
+      if(guess > num){
+         std::cout << "Too High!" << std::endl;
+      }
+      else if (guess < num){
+         std::cout << "Too Low!" << std::endl;
+      }
+      else{
+         std::cout << "CORRECT!\n" << "# of tries: " << tries << std::endl;
+      }
+
+   }while(guess != num);
+
+   std::cout << "************************************************" << std::endl;
+   return 0;
+}
+
+How hard was it?: Still super easy it's basic understanding of snytax
+Do you understand the code: YESSS
+Enjoyment: 100% lovin it 
+
+User Defined Functions
+
+Bro Code Comments
+
+function = a block of reusable code 
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+void happyBirthday(std::string name, int age);
+
+int main(){
+   std::string name = "Archer";
+   int age = 21;
+   happyBirthday(name, age);
+   happyBirthday(name, age);
+   happyBirthday(name, age);   
+
+
+   return 0;
+}
+
+void happyBirthday(std::string name, int age){
+   std::cout << "Happy Birthday to " << name << std::endl;
+   std::cout << "Happy Birthday dear " << name << std::endl;
+   std::cout << "Happy Birthday to you" << std::endl;
+   std::cout << "You are " << age << " years old" << std::endl;
+   std::cout << "Hip Hip Horarry\n\n" << std::endl;
+}
+
+
+Comments 
+   If you want a function to be not be above the main function you have to add the fuction type name and all the parmaerters 
+   at the top like i did. But it's optional you don't have to, and if you don't then you have to write all function above 
+   the main function
+
+   
+Return Keyword
+
+Bro Code Comments
+   return = return a value back to the spot where you called the encompassing function
+
+Code 
+
+#include <iostream>
+#include <ctime>
+#include <cmath>
+
+std::string concatStrings(std::string firstName, std::string lastName);
+
+int main(){
+   const std::string firstName = "Archer";
+   const std::string lastName = "Dragone";   
+   const std::string fullName = concatStrings(firstName, lastName);
+
+   std::cout << "Hello " << fullName << std::endl;
+
+   return 0;
+}
+
+std::string concatStrings(std::string firstName, std::string lastName){
+   return firstName + " " + lastName;
+}
+
+Comments 
+
+   Always return the type of what you declared when naming the function
+
+Overloaded Functions
+
+Code 
+
+#include <iostream>
+#include <ctime>
+#include <cmath>
+
+void bakePizza(std::string topping1, std::string topping2);
+void bakePizza(std::string topping1);
+void bakePizza();
+
+int main(){
+   bakePizza("pepporoni", "funghi");
+
+
+   return 0;
+}
+
+void bakePizza(){
+   std::cout << "Ecco la tua pizza!" << std::endl;
+}
+
+void bakePizza(std::string topping1){
+   std::cout << "Ecco la tua pizza con " << topping1 << std::endl;
+}
+
+void bakePizza(std::string topping1, std::string topping2){
+   std::cout << "Ecco la tua pizza con " << topping1 << " e "  << topping2 << std::endl;
+}
+
+Comments
+
+a new function with different parmaerters are known as signatures
+
+
+Variable Scope
+
+Bro Code Comments
+
+Local variables = declared inside a function or block {}
+Global variables = declared outside of all functions
+
+Code 
+
+#include <iostream>
+#include <ctime>
+#include <cmath>
+
+int myNum = 3;
+
+void printNum(int num);
+
+int main(){
+   int myNum = 1;
+   printNum(::myNum);
+
+
+   return 0;
+}
+void printNum(int num){
+   std::cout << num << std::endl;
+}
+
+Comments 
+If you have a local variable in a function but want to use the golbal version preceed the naming of the variable with :: and that will 
+give you the golbal version otherwise if you want to use the local version just dont preceed it with anything.
+
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                               Banking Program
+
+Code 
+
+#include <iostream>
+#include <ctime>
+#include <cmath>
+#include <iomanip>
+
+void showBalance(double balance);
+double deposit();
+double withdraw(double balance);
+
+int main(){
+   double balance = 0;
+   int choice = 0;
+
+   do{
+      std::cout << "** Banking Program **" << std::endl;
+      std::cout << "Enter your choice:" << std::endl;
+      std::cout << "*********************" << std::endl;
+      std::cout << "1. Show Balance" << std::endl;
+      std::cout << "2. Deposit Money" << std::endl;
+      std::cout << "3. Withdraw Money" << std::endl;
+      std::cout << "4. Exit" << std::endl;
+      std::cin >> choice;
+
+      if(std::cin.fail()) {
+         std::cin.clear();
+         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+         std::cout << "Invaild Input" << std::endl;
+         continue;
+      }
+
+      std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+      switch (choice){
+         case 1: showBalance(balance); break;
+         case 2: balance += deposit(); showBalance(balance); break;
+         case 3: balance -= withdraw(balance); showBalance(balance); break;
+         case 4: std::cout << "Thanks for visting!" << std::endl; break;
+         default: std:: cout << "Invaild choice" << std::endl;
+      }
+
+   }while(choice != 4);
+
+   return 0;
+}
+
+
+void showBalance(double balance){
+   std::cout << "Your balance is: $" << std::setprecision(2) << std::fixed << balance << std::endl;
+}
+
+double deposit(){
+   double amount = 0;
+
+   std::cout << "Enter amount to be deposited: ";
+   std::cin >> amount;
+
+   if(amount > 0){
+      return amount;
+   }
+   else{
+      std::cout << "That's not a vaild amount\n\n" << std::endl;
+      return 0;
+   }
+
+   return amount;
+}
+
+double withdraw(double balance){
+   double amount = 0;
+
+   std::cout << "Enter to be withdrawn: ";
+   std::cin >> amount;
+
+   if (amount > balance){
+      std::cout << "Insufficinet funds" << std::endl;
+      return 0;
+   }
+   else if(amount < 0){
+      std::cout << "That's not a vaild amount" << std::endl;
+      return 0;
+   }
+   else{
+      return amount;
+   }
+
+   return amount;
+}
+
+How hard was it?: A little harder not too hard
+Do you understand the code: Most of it 
+Enjoyment: 100% lovin it 
+
+I did go through an error on this project but i documented it in problems.txt
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                          Rock Paper Scissors Game
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+char getUserChoice();
+char getComputerChoice();
+void showChoice(char choice);
+void chooseWinner(char player, char computer);
+
+int main(){
+   char player;
+   char computer;
+
+   player = getUserChoice();
+   std::cout << "Your choice: ";
+   showChoice(player);
+
+   computer = getComputerChoice();
+   std::cout << "Computer choice: ";
+   showChoice(computer);
+
+   chooseWinner(player, computer);
+   return 0;
+}
+
+
+char getUserChoice(){
+   char player;
+   std::cout << "*************************" << std::endl;
+   std::cout << "Rock-Paper-Scissors Game!" << std::endl;  
+   do{
+      std::cout << "*************************" << std::endl;
+      std::cout << "Choose one of the following" << std::endl;
+      std::cout << "*************************" << std::endl;
+      std::cout << "'r' for rock" << std::endl;
+      std::cout << "'p' for paper" << std::endl;   
+      std::cout << "'s' for scissors" << std::endl; 
+      std::cin >> player;
+      std::cout << "*************************" << std::endl;
+
+   }while(player != 'r' && player != 'p' && player != 's');
+   
+   return player;
+
+   return ' ';
+}
+
+char getComputerChoice(){ 
+   srand(time(NULL));
+   int num = rand() % 3 + 1;
+   
+   switch (num){            // COMMENT HERE DON'T NEED TO ADD BREAK CUZ RETURN DOES IT ANYWAYS
+   case 1: return 'r';
+   case 2: return 'p';
+   case 3: return 's';
+   
+   }
+
+   return ' ';
+}
+
+void showChoice(char choice){
+   
+   switch (choice){
+   case 'r': std::cout << "Rock" << std::endl; break;
+   case 'p': std::cout << "Paper" << std::endl; break;
+   case 's': std::cout << "Scissors" << std::endl; break;
+   
+   }
+}
+
+void chooseWinner(char player, char computer){
+
+   switch (player){
+   case 'r':
+      if(computer == 'r'){
+         std::cout << "TIE" << std::endl; 
+      }   
+      else if (computer == 'p'){
+         std::cout << "LOST" << std::endl;
+      }
+      else{
+         std::cout << "WIN!" << std::endl;
+      }
+      break;
+   case 'p':
+      if(computer == 'p'){
+         std::cout << "TIE" << std::endl; 
+      }   
+      else if (computer == 's'){
+         std::cout << "LOST" << std::endl;
+      }
+      else{
+         std::cout << "WIN!" << std::endl;
+      }
+      break;
+   case 's':
+      if(computer == 's'){
+         std::cout << "TIE" << std::endl; 
+      }   
+      else if (computer == 'r'){
+         std::cout << "LOST" << std::endl;
+      }
+      else{
+         std::cout << "WIN!" << std::endl;
+      }
+      break;
+   }
+}
+
+Comments 
+
+   In the switch case statement in getComputerChoice we didn't have to add a break statement because return get's out of the switch
+   anyways
+
+
+How hard was it?: Easy
+Do you understand the code: Yep 
+Enjoyment: 100% lovin it * 100 
+
+Arrays 
+
+Bro Code Comments 
+
+array = a data strucuture that can hold multiple values 
+        values are accessed by an index number 
+        "kind of like a variable that holds multiple values"
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+
+int main(){
+   double prices[] = {5.00, 7.50, 9.99, 15.00};
+
+   for(int i = 0; i < 4; i++){
+      std::cout << prices[i] << std::endl;
+   }
+
+   return 0;
+}
+
+
+Comments 
+
+arrayType arrayName[] = {data1, data2...}    Normal way of making an array with set values
+arrayType arrayName[sizeOfArray];             when you say the size of the array it doesnt start at 0
+
+.sizeof()
+
+Bro Code Comments
+
+sizeof() = determines the size in bytess of a: variable, data type, class, object etc
+
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+
+int main(){
+   double gpa = 2.5;
+   std::string name = "Archer";
+   char grade = 'F';
+   bool student = true;
+   char grades[] = {'A', 'B', 'C', 'D', 'E','F'};
+   std::string students[] = {"Spongebob", "Patrick", "Squidward", "Sady"};
+
+
+   std::cout << sizeof(students)/sizeof(std::string) << " elements" << std::endl;
+
+   return 0;
+}
+
+
+Comments 
+   I don't really know
+
+
+Iterate of an array                
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+
+int main(){
+   
+   //std::string students[] = {"Spongebob", "Patrick", "Squidward"};
+   char grades[] = {'A', 'B', 'C', 'D', 'F'};
+
+   for(int i = 0; i < sizeof(grades)/sizeof(char); i++){
+      std::cout << grades[i] << std::endl; 
+   }
+
+
+   return 0;
+}
+
+Comments 
+
+Find a way to so to make it easier to not change the data type only the variable name
+
+Foreach Loop
+
+Bro Code Comments
+
+foreach loop = loop that eases the traversal over an
+               interable dataset 
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+
+int main(){
+   
+   //std::string students[] = {"Spongebob", "Patrick", "Squidward", "Sandy"};
+   int grades[] = {65, 72, 81, 93};
+
+   for(int grade : grades){
+      std::cout << grade << std::endl;
+   }  
+
+   return 0;
+}
+
+
+Comments 
+
+   Standard for loops provide more control while foreach loop are better for getting each element 
+
+Pass An Array to an fuction
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+double getTotal(int size, double prices[]);
+
+int main(){
+   
+   double prices[] = {49.99, 15.05, 75, 9.99};
+   int size = sizeof(prices)/sizeof(prices[0]);
+   double total = getTotal(size, prices);
+
+   std::cout << "$" << total << std::endl;
+
+   return 0;
+}
+
+double getTotal(int size, double prices[]){ // prices in this function now becomes a pointer
+   double total = 0;
+   
+   for(int i = 0; i < size; i++){
+      total += prices[i];
+   }
+
+   return total;
+}
+
+Comments
+
+When you pass in an array to a function the array isn't the actual array you passed in, its a memory address of the actual array
+
+
+Search an array for an Element
+
+Code
+
+#include <iostream>
+#include <ctime>
+
+int searchArray(std::string array[], int size, std::string element);
+
+int main(){
+   std::string foods[] = {"Pizza", "Hotdog", "Hamburger"};  
+   int size = sizeof(foods)/sizeof(foods[0]);
+   int index;
+   std::string myFood;
+
+   std::cout << "Enter element to search for: ";
+   std::getline(std::cin, myFood);
+
+   index = searchArray(foods, size, myFood);
+
+   if(index != -1){
+      std::cout << myFood << " is at index " << index << std::endl;
+   }
+   else{
+      std::cout << myFood << " was not found" << std::endl;
+   }
+
+   return 0;
+}
+
+int searchArray(std::string array[], int size, std::string element){
+   for(int i = 0; i < size; i++){
+      if(array[i] == element){
+         return i;
+      }
+   }
+   return -1;
+} 
+
+Comments 
+
+   Went through an error all good tho, it wasn't something that I needed to documented it was just me poorly looking
+
+
+Sorting an array
+
+Code
+
+#include <iostream>
+#include <ctime>
+
+void sort(int array[], int size);
+
+int main(){
+   int array[] = {10, 1, 9, 2, 8, 3, 7, 4, 6, 5};
+   int size = sizeof(array)/sizeof(array[0]);
+
+   sort(array, size);
+
+   for(int num : array){
+      std::cout << num << " " << std::endl;
+   }
+
+   return 0;
+}
+
+void sort(int array[], int size){
+   int temp;
+
+   for(int i = 0; i < size - 1; i++){
+      for(int j = 0; j < size - i - 1; j++){
+         if(array[j] < array[j + 1]){
+            temp = array[j];
+            array[j] = array[j + 1];
+            array[j + 1] = temp;
+         }
+      }
+   }
+
+}
+
+Comments
+
+Using a bubble sort, are better ways to do it tho
+
+
+Fill()
+
+Bro Code Comments
+
+fill() = Fills a range of elements with a specified value 
+         fill(begin, end, value)
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   const int SIZE = 99;
+   std::string foods[SIZE];
+
+   fill(foods, foods + (SIZE/3), "pizza");
+   fill(foods + (SIZE/3), foods + (SIZE/3)*2, "hamburgers");
+   fill(foods + (SIZE/3)*2, foods + SIZE, "hotdogs");
+
+   for(std::string food : foods){
+      std::cout << food << std::endl;
+   }
+
+   return 0;
+}
+
+
+Comments
+
+A bit weird you don't start with index and end index you start with name of array then the place where you want it to fill up to
+
+Fill an array with user input
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   std::string foods[5];
+   int size = sizeof(foods)/sizeof(foods[0]);
+   std::string temp;
+
+   for(int i = 0; i < size; i++){
+      std::cout << "Enter a food you like or 'q' to quit #" << i+1 << ": ";
+      
+      std::getline(std::cin, temp);
+      if(temp == "q"){
+         break;
+      }
+      foods[i] = temp;
+   }
+
+   std::cout << "You like the following food: " << std::endl;
+   for(int i = 0; !foods[i].empty(); i++){
+      std::cout << foods[i] << std::endl;
+   }
+
+   return 0;
+}
+
+Comments
+
+   Idk 
+
+Multidimensional arrays 
+
+Bro Code Comments
+   2d array = {array1, array2, array3}
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   std::string cars[][3] = {{"Mustang", "Escape", "F-150"}, 
+                           {"Corvette", "Equinox", "Silverado"},
+                           {"Challenger", "Durango", "Ram 150"}};
+   int rows = sizeof(cars)/sizeof(cars[0]);
+   int columns = sizeof(cars[0])/sizeof(cars[0][0]);
+
+   for(int i = 0; i<rows; i++){
+      std::cout << "ROW " << i+1 << "\n" << std::endl;
+      for(int j = 0; j<columns; j++){
+         std::cout << "COLUMN AT ROW " << i << std::endl << "DATA: " << cars[i][j`] << std::endl;
+      }
+   }
+
+   return 0;
+}
+
+Comments
+   Looking good
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                                 QUIZ GAME
+
+Code 
+
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   std::string questions[] = {"1. What was year C++ created?: ",
+                              "2. Who invented C++?: ",
+                              "3. What is the predencessor of C++: ",
+                              "4. is the Earth flat?"};
+
+   std::string options[][4] = {{"A. 1969", "B. 1975", "C. 1985", "D. 1989"},
+                               {"A. Guido Van Rossum", "B. Bjarne Stroustrup", "C. John Carmack", "D. Mark Zuckrburg"},
+                               {"A. C", "B. C+", "C. C--", "D. B++"},
+                               {"A. Yes", "B. No", "C. Sometimes", "D. What's Earth?"}};
+   char answerKey[] = {'C', 'B', 'A', 'B'};
+
+   int numOfQuestions = sizeof(questions)/sizeof(questions[0]);
+   char guess;
+   int score;
+
+   std::cout << "********** QUIZ GAME **********" << std::endl;
+   for(int i = 0; i < numOfQuestions; i++){
+      std::cout << "*******************************" << std::endl;
+      std::cout << questions[i] << std::endl;
+      std::cout << "*******************************" << std::endl;
+
+      for(int j = 0; j < sizeof(options[i])/sizeof(options[i][0]); j++){
+         std::cout << options[i][j] << std::endl;
+      }
+      
+      std::cin >> guess;
+      guess = toupper(guess);
+
+      if(guess == answerKey[i]){
+         std::cout << "CORRECT" << std::endl;
+         score++;
+      }
+      else{
+         std::cout << "WRONG" << std::endl;
+         std::cout << "Answer: " << answerKey[i] << std::endl;
+      }
+   }
+
+   std::cout << "*****************************" << std::endl;
+   std::cout << "********** RESULTS **********" << std::endl;
+   std::cout << "*****************************" << std::endl;
+   std::cout << "CORRECT GUESSES: " << score << std::endl;
+   std::cout << "NUMBER OF QUESTIONS: " << numOfQuestions << std::endl;
+   std::cout << "SCORE: " <<  (score/(double) numOfQuestions)*100 << "%" << std::endl;
+
+   return 0;
+}
+
+How hard was it?: Easy-Medium
+Do you understand the code: 99.99999% 
+Enjoyment: 100% lovin it * 1000
+
+Memory Addresses 
+
+Bro Code Comments
+
+   memory address = a location in memory where data is stored
+   a memory address can be accessed with & (address-of operator)
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int main(){
+   std::string name = "Bro";
+   int age = 21;
+   bool student = true;
+
+   std::cout << &name << std::endl;
+   std::cout << &age << std::endl;
+   std::cout << &student << std::endl;
+
+
+   return 0;
+}
+
+Comments
+
+& gets the memory address of a varible 
+
+
+Pass by VALUE vs pass by REFERENCE
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+void swap(std::string &x, std::string &y);
+
+int main(){
+   std::string x = "Kool-Aid";
+   std::string y = "Water";
+
+   std::cout << "X: " << x << std::endl;
+   std::cout << "Y: " << y << std::endl;
+
+   swap(x, y);
+
+   std::cout << "X: " << x << std::endl;
+   std::cout << "Y: " << y << std::endl;
+
+   return 0;
+}
+
+void swap(std::string &x, std::string &y){
+   std::string temp;
+   temp = x;
+   x = y;
+   y = temp;
+
+}
+
+Comments
+
+   Pass by value is where you pass the value of the data and when you change the data
+   inside a function it makes a copy of it and doesn't actually change the data you 
+   passed in because it's not changing the same memory address.
+
+   Pass by reference is where you pass the memory address of the variable so it can chage
+   the data of the memory address, so it doesn't have to make a copy it can jut change 
+   the data inside the memory address
+
+   Try to use pass by reference as much as possible unless you have a reason to use pass by value
+
+
+Const Parameter
+
+Bro Code Comments
+
+const parameter = parameter that is effectively read-only
+                  code is more secure & conveys intent 
+                  useful for references and pointers
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+void printInfo(const std::string name, const int age);
+
+int main(){
+   std::string name = "Bro";
+   int age = 21;
+
+   printInfo(name, age);
+
+   return 0;
+}
+
+void printInfo(const std::string name, const int age){
+   std::cout << name << std::endl;
+   std::cout << age << std::endl;
+}
+
+Comments
+   Becomes a bigger deal when using reference data types
+
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                      Credit Card Vaildator Program
+
+Code 
+
+#include <iostream>
+
+int getDigit(const int number);
+int sumOddDigits(const std::string cardNumber);
+int sumEvenDigits(const std::string cardNumber);
+
+int main(){
+    // 6011000990139424    
+    std::string cardNumber;
+    int result = 0;
+    
+    std::cout << "Enter a credit card number: ";
+    std::cin >> cardNumber;
+
+    result = sumEvenDigits(cardNumber) + sumOddDigits(cardNumber);
+
+    if(result % 10 == 0){
+        std::cout << cardNumber << " is vaild" << std::endl;
+    }
+    else{
+       std::cout << cardNumber << " is not vaild" << std::endl;
+    }
+
+    return 0;
+}
+
+int getDigit(const int number){
+
+    return number % 10 + ((number /10) % 10);
+}
+int sumOddDigits(const std::string cardNumber){
+    int sum = 0;
+
+    for(int i = cardNumber.size() - 1; i >= 0; i-=2){
+        sum += cardNumber[i] - '0';
+    }
+
+    return sum;
+}
+int sumEvenDigits(const std::string cardNumber){
+    int sum = 0;
+
+    for(int i = cardNumber.size() - 2; i >= 0; i-=2){
+        sum += getDigit((cardNumber[i] - '0') * 2);
+    }
+
+    return sum;
+}
+
+How hard was it?: Only the algorithm is hard
+Do you understand the code: Besides  sum += getDigit((cardNumber[i] - '0') * 2); and a little others mostly
+Enjoyment: 100% lovin it * 10000
+
+
+Pointers 
+
+Bro Code Comments
+   pointers = variable that stores a memory address of another variable
+              sometimes it's easier to work with an address
+
+              & address-of operator 
+              * dereference operator
+
+Code 
+
+#include <iostream>
+
+int main(){
+    std::string name = "Bro";
+    int age = 21;
+    std::string freePizzas[5] = {"pizza1", "pizza2", "pizza3", "pizza4", "pizza5"};
+
+    std::string *pName = &name;
+    int *pAge = &age;
+    std::string *pFreePizzas = freePizzas;
+
+    std::cout << *pName << std::endl;
+    std::cout << *pAge << std::endl;
+
+    return 0;
+}
+
+
+Comments 
+
+arrays are already pointers 
+
+
+Null Pointers
+
+Bro Code Comments 
+   Null value = a special value that means something has no value.
+                when a pointer is holding a null value,
+                that pointer is not poiting at anything (null pointer)
+
+   nullptr = keyword represents a null pointer literal
+   nullptrs are helpful when determining if an address 
+   was successfully assigned to a pointer
+
+Code 
+
+#include <iostream>
+
+int main(){
+    int *pointer = nullptr;
+    int x= 123;
+
+    pointer = &x;
+
+    if(pointer == nullptr){
+        std::cout <<"address was not assigned!" << std::endl;
+    }
+    else{
+        std::cout << "address was assigned!" << std::endl;
+        std::cout << *pointer;
+    }
+
+    return 0;
+}
+
+Comments
+   always check if a null pointer was unassigned other wise it can lead to undefiend behaviour
+
+
+----------------------------------------------------------------- PROJECT -----------------------------------------------------------------
+                                                                Tic Tac Toe
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+void drawBoard(char *spaces);
+void playerMove(char *spaces, char player);
+void computerMove(char *spaces, char computer);
+bool checkWinner(char *spaces, char player, char computer);
+bool checkTie(char *spaces);
+
+int main(){
+    char spaces[9] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+    char player = 'X';
+    char computer = 'O';
+    bool running = true;
+    int size = sizeof(spaces)/sizeof(spaces[0]);
+
+    drawBoard(spaces);
+
+    while(running){
+        playerMove(spaces, player);
+        if(checkTie(spaces)){
+            running = false;
+            break;
+        }    
+        else if(checkWinner(spaces, player, computer)){
+            running = false;
+            break;
+        }
+        computerMove(spaces, computer);
+        if(checkTie(spaces)){
+            running = false;
+            break;
+        }    
+        else if(checkWinner(spaces, player, computer)){
+            running = false;
+            break;
+        }
+        drawBoard(spaces);
+    }
+
+    std::cout << "Thanks for playing" << std::endl;
+
+    return 0;
+}
+
+
+void drawBoard(char *spaces){
+    std::cout << std::endl;
+    std::cout << "     |     |     " << std::endl;
+    std::cout << "  " << spaces[0] << "  |  " << spaces[1] << "  |  " << spaces[2] << "   " << std::endl;
+    std::cout << "_____|_____|_____" << std::endl;
+    std::cout << "     |     |     " << std::endl;
+    std::cout << "  " << spaces[3] << "  |  " << spaces[4] << "  |  " << spaces[5] << "   " << std::endl;
+    std::cout << "_____|_____|_____" << std::endl;
+    std::cout << "     |     |     " << std::endl;
+    std::cout << "  " << spaces[6] << "  |  " << spaces[7] << "  |  " << spaces[8] << "   " << std::endl;
+    std::cout << "     |     |     " << std::endl;
+    std::cout << std::endl;
+}
+void playerMove(char *spaces, char player){
+    int number;
+    do{
+        std::cout << "Enter a spot to place a marker (1-9): ";
+        std::cin >> number;
+        number--;
+
+        if(spaces[number] == ' '){
+            spaces[number] = player;
+            break;
+        }
+
+    }while(!number > 0 || !number < 8);
+}
+void computerMove(char *spaces, char computer){
+    int number;
+    srand(time(NULL));
+
+    while(true){
+        number = rand() % 9;
+        if(spaces[number] == ' '){
+            spaces[number] = computer;
+            break;
+        }
+    }
+}
+bool checkWinner(char *spaces, char player, char computer){
+    
+    if(spaces[0] != ' ' && spaces[0] == spaces[1] && spaces[1] == spaces[2]){
+        spaces[0] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+
+    else if(spaces[3] != ' ' && spaces[3] == spaces[4] && spaces[4] == spaces[5]){
+        spaces[3] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+    else if(spaces[6] != ' ' && spaces[6] == spaces[7] && spaces[7] == spaces[8]){
+        spaces[8] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+    else if(spaces[0] != ' ' && spaces[0] == spaces[3] && spaces[3] == spaces[6]){
+        spaces[8] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+    else if(spaces[1] != ' ' && spaces[1] == spaces[4] && spaces[4] == spaces[7]){
+        spaces[8] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+    else if(spaces[2] != ' ' && spaces[2] == spaces[5] && spaces[5] == spaces[8]){
+        spaces[8] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+    else if(spaces[0] != ' ' && spaces[0] == spaces[4] && spaces[4] == spaces[8]){
+        spaces[8] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+    else if(spaces[2] != ' ' && spaces[2] == spaces[4] && spaces[4] == spaces[6]){
+        spaces[8] == player ? std::cout << "You win!" << std::endl : std::cout << "You lose" << std::endl;
+    }
+}
+bool checkTie(char *spaces){
+
+    for(int i = 0; i < 9; i++){
+        if(spaces[i] == ' '){
+            return false;
+        }
+    }
+    std::cout << "IT'S A TIE" << std::endl;
+    return true;
+}
+
+
+Comments 
+
+Just took too long I spent like 3 hours writing this and ended up getting lazy and copied bro code
+
+How hard was it?: Hard
+Do you understand the code: Yes
+Enjoyment: 100% lovin it * 1000
+
+Dynamic Memory
+
+Bro Code Comments
+   dynamic memory = Memory that is allocated after the program is already compiled and running.
+                    Use the 'new' operator to allocate memory in the heap rather than the stack
+
+                    Useful when we don't know how much memory we will need.
+                    Makes our program more flexible, especially when accepting user input.
+
+Code
+
+#include <iostream>
+#include <ctime>
+
+
+int main(){
+    /*int *pNum = NULL;
+
+    pNum = new int;
+
+    *pNum = 21;
+
+    std::cout << "address: " << pNum << std::endl;
+    std::cout << *pNum << std::endl;
+
+    delete pNum;
+    */
+
+    char *pGrades = NULL;
+    int size;
+
+    std::cout << "How many grades to enter in: ";
+    std::cin >> size;
+
+    pGrades = new char[5];
+
+    for(int i = 0; i < size; i++){
+        std::cout << "Enter number " << i+1 << ": ";
+        std::cin >> pGrades[i];
+    }
+
+    for(int i = 0; i < size; i++){
+        if(i == size){
+            std::cout << pGrades[i] << " " << std::endl;
+        }
+        else{
+            std::cout << pGrades[i] << " ";    
+        }
+        
+    }
+    
+    delete[] pGrades;
+    return 0;
+}
+
+Comments
+   Learning some advanced stuff
+
+Recursion
+
+Bro Code Comments
+   recursion = a programming technique where a function
+               invokes itself from withn 
+               breaks complex concept into a repeatable single step
+
+               iterative vs recursive 
+
+               advantages = less code is cleaner 
+                            useful for sorting and searching algorithms 
+               disavantages = use more memory and slower
+
+Code 
+
+#include <iostream>
+#include <ctime>
+
+int factorial(int num);
+
+int main(){
+
+    std::cout << factorial(10);
+
+    return 0;
+}
+
+int factorial(int num){
+    if(num > 1){
+        return num * factorial(num - 1);
+    }
+    else{
+        return 1;
+    }
+}
+
+Comments 
+   Always make sure it's the right time to use recursion
+
+Function Templates
+
+Bro Code Comments
+   function template = describes what a function looks like.
+                       Can be used to generate as many overloaded functions
+                       as needed, each using differnt data types 
+Code 
+
+#include <iostream>
+template <typename T, typename U>
+
+auto max(T x, U y){
+    return (x > y) ? x : y;
+}
+int main(){
+
+    std::cout << max(1, 2.1) << std::endl;
+
+    return 0;
+}
+
+Comments 
+   jesus I need to learn a lot more
+
+Struct 
+
+Bro Code Comments
+   struct = A structure that group related variables under one name
+            structs can contain many different data types (string, int, double, bool, etc...)
+            variables in a struct are known as "members"
+            members can be access with . "Class Member Acess Operator"
+
+Code 
+
+#include <iostream>
+
+struct student{
+    std::string name;
+    double gpa;
+    bool enrolld = true;
+};
+
+
+int main(){
+    student student1;
+    student1.name = "Spongebob";
+    student1.gpa = 3.2;
+    student1.enrolld = true;
+
+    student student2;
+    student2.name = "Patrick";
+    student2.gpa = 2.1;
+    student2.enrolld = true;
+
+    student student3;
+    student3.name = "Squidward";
+    student3.gpa = 1.5;
+    student3.enrolld = false;
+
+    std::cout << student1.name << std::endl;
+    std::cout << student1.gpa << std::endl;
+    std::cout << student1.enrolld << std::endl;
+    std::cout << "---------------" << std::endl;
+    std::cout << student2.name << std::endl;
+    std::cout << student2.gpa << std::endl;
+    std::cout << student2.enrolld << std::endl;
+    std::cout << "---------------" << std::endl;
+    std::cout << student3.name << std::endl;
+    std::cout << student3.gpa << std::endl;
+    std::cout << student3.enrolld << std::endl;
+
+    return 0;
+}
+
+
+
+Comments
+   To set defualt values you already set them in the struct so you don't have to declear it 
+
+
+Pass structs as arguments
+
+Code 
+
+#include <iostream>
+
+struct Car{
+    std::string model;
+    int year;
+    std::string colour;
+};
+
+void printCar(const Car &car);
+void paintCar(Car &car, std::string colour);
+
+int main(){
+    Car car1;
+    Car car2;
+
+    car1.model = "Mustang";
+    car1.year = 2023;
+    car1.colour = "Red";
+
+    car2.model = "Corvette";
+    car2.year = 2024;
+    car2.colour = "Blue";
+
+    paintCar(car1, "Silver");
+    paintCar(car2, "Gold");
+
+    std::cout << &car1 << std::endl;
+    printCar(car1);
+    printCar(car2);
+
+    return 0;
+}
+
+void printCar(const Car &car){
+    std::cout << car.model << std::endl;
+    std::cout << car.year << std::endl;
+    std::cout << car.colour << std::endl;
+    std::cout << &car << std::endl;
+}
+
+void paintCar(Car &car, std::string colour){
+    car.colour = colour;
+}
+
+Comments 
+   Nothing really much to say almost done! yay!
+
+Enums 
+
+Bro Code Comments
+   enums = a user-defined data type that consists 
+           of paired named-integers constants.
+           GREAT if you have a set of potential options
+
+Code
+
+#include <iostream>
+
+enum Day{sunday = 0, monday = 1, tuesday = 2, wednesday = 3, thursday = 4 , friday = 5, saturday = 6};
+enum Flavor{vanilla, chocolate, strawberry, mint};
+enum Colour{red, orange, yellow, green, blue, purple};
+enum Planet{mercury = 4880, venus = 12104, earth = 12756, mars = 6794, jupiter = 142984,
+            saturn = 108728, uranus = 51118, neptune = 49532, pluto = 2320};
+
+int main(){
+    Day today = sunday;
+
+    switch(today){
+        case sunday: std::cout << "It is Sunday!" << std::endl; break;
+        case monday: std::cout << "It is Monday!" << std::endl; break;
+        case tuesday: std::cout << "It is Tuesday!" << std::endl; break;
+        case wednesday: std::cout << "It is Wednesday!" << std::endl; break;
+        case thursday: std::cout << "It is Thursday!" << std::endl; break;
+        case friday: std::cout << "It is Friday!" << std::endl; break;
+        case saturday: std::cout << "It is Saturday!" << std::endl; break;
+    }
+
+    return 0;
+}
+
+
+Comments 
+
+   Can be accessed with number or value 
+   If you don't declare what each value is equal to then it just goes in order from 0, 1, 2 etc
+
+Object Oriented Programming 
+
+Bro Code Comments
+   object = A collection of attributes and methods 
+            They can have characteristics and could pefrom actions
+            Can be used to mimic real world items (ex. Phone, Book etc);
+            Created from a class which acts as a "blue print"
+
+Code 
+
+#include <iostream>
+
+class Car{
+    public:
+        std::string make;
+        std::string model;
+        int year;
+        std::string colour;
+
+        void accelerate(){
+            std::cout << "You step the gas" << std::endl;
+        }
+        void brake(){
+            std::cout << "You step on the brakes" << std::endl;
+        }
+};
+
+int main(){
+    Car car1;
+
+    car1.make = "Ford";
+    car1.model = "Mustang";
+    car1.year = 2023;
+    car1.colour = "Sliver";
+
+    std::cout << car1.make << std::endl;
+    std::cout << car1.model << std::endl;
+    std::cout << car1.year << std::endl;
+    std::cout << car1.colour << std::endl;
+
+    car1.accelerate();
+    car1.brake();
+
+    return 0;
+}
+
+Comments
+   I know what this I learnt it in Python and I fuckin know Java
+
+Constructors 
+
+   Bro Code Comments
+      constructor = special method that is automatically called when a object is instantiated
+                    useful for assigning values to attributes as arguments
+
+Code 
+
+#include <iostream>
+
+class Car{
+    public:
+        std::string make;
+        std::string model;
+        int year;
+        std::string colour;
+    
+    Car(std::string make, std::string model, int year, std::string colour){
+        this-> make = make;
+        this-> model = model;
+        this-> year = year;
+        this-> colour = colour;
+    }
+};
+
+int main(){
+    Car car1("Chevy", "Corvette", 2022, "Blue");
+    Car car2("Ford", "Mustang", 2023, "Red");
+
+    std::cout << car1.model << std::endl;
+    std::cout << car1.make << std::endl;
+    std::cout << car1.year << std::endl;
+    std::cout << car1.colour << std::endl;
+
+    std::cout << car2.model << std::endl;
+    std::cout << car2.make << std::endl;
+    std::cout << car2.year << std::endl;
+    std::cout << car2.colour << std::endl;
+    return 0;
+}
+
+Comments
+   You took too long on this Bro Code
+
+
+Overloaded Constructors
+
+Bro Code Comments
+   overloaded constructors = multiple constructors with same name but different parameters
+                             allows fo varing arguments when instantiating an object
+
+Code 
+
+#include <iostream>
+
+class Pizza{
+    public: 
+        std::string topping1;
+        std::string topping2;
+
+    Pizza(){
+        
+    }
+
+    Pizza(std::string topping1){
+        this->topping1 = topping1;
+    }
+
+    Pizza(std::string topping1, std::string topping2){
+        this->topping1 = topping1;
+        this->topping2 = topping2;
+    }
+};
+
+int main(){
+    Pizza pizza1 = Pizza("Pepperoni");
+    Pizza pizza2 = Pizza("Mushrooms", "Peppers");
+    Pizza pizza3; // Pizza with no topping this is how you make a class with no atributes;
+
+    std::cout << pizza2.topping1 << std::endl;
+    std::cout << pizza2.topping2 << std::endl;
+
+    return 0;
+}
+
+Comments 
+   I don't pretty easy 
+
+
+Getters and Setters 
+
+Bro Code Comments
+   Abstraction = Hiding unnecessary data from outside a class
+   Getter = Function that makes private attributes READABLE
+   Setters = Function that makes a private attribute WRITEABLE
+
+Code 
+
+#include <iostream>
+
+class Stove{
+    private:
+        int temperature = 0;
+    public:
+    
+    int getTemperature(){
+        return temperature;
+    }
+    void setTemperature(int temperature){
+        if(temperature < 0){
+            this->temperature = 0;
+        }
+        else if(temperature >= 10){
+            this->temperature = 10;
+        }
+        else{
+            this->temperature = temperature;
+        }
+    }
+};
+
+int main(){
+    Stove stove;
+
+    stove.setTemperature(-3);
+    std::cout << stove.getTemperature() << std::endl;
+
+    return 0;
+}
+
+Comments
+   One more to go
+
+   
+Inheritance 
+
+   Bro Code Comments
+      inheritance = a class can recieve attributes and methods from another class
+                    Children classes inherit from a Parent class
+                    Helps to reuse similar code found within multiple classes 
+
+Code 
+
+Example 1
+
+#include <iostream>
+
+class Animal{
+    public:
+        bool alive = true;
+    
+    void eat(){
+        std::cout << "This animal is eating" << std::endl;
+    }
+};
+
+class Dog : public Animal{
+    public: 
+
+    void bark(){
+        std::cout << "The dog goes woof" << std::endl;
+    }
+};
+
+class Cat : public Animal{
+    public:
+    
+    void meow(){
+        std::cout << "The cat goes meow" << std::endl;
+    }
+};
+
+int main(){
+    Dog dog;
+    Cat cat;
+
+    std::cout << dog.alive << std::endl;
+    dog.eat();
+    dog.bark();
+    std::cout << "-----------------" << std::endl;
+    std::cout << cat.alive << std::endl;
+    cat.eat();
+    cat.meow();
+
+    return 0;
+}
+
+Example 2
+
+#define _USE_MATH_DEFINES
+#include <iostream>
+#include <cmath>
+
+class Shape{
+    public:
+        double area;
+        double volume;
+};
+
+class Cube : public Shape{
+    public:
+        double side;
+    
+    Cube(double side){
+        this->side = side;
+        this->area = side * side * 6;
+        this->volume = pow(side, 3);
+    }
+};
+
+class Sphere : public Shape{
+    public: 
+        double radius;
+
+    Sphere(double radius){
+        this->radius = radius;
+        this->area = 4 * M_PI * (radius * radius);
+        this->volume = (4 / 3.0) * M_PI * pow(radius, 3);
+    }
+};
+
+int main(){
+    Cube cube(10);    
+    Sphere sphere(5);
+
+    std::cout << "Area: " << sphere.area << "cm" << std::endl;
+    std::cout << "Volume: " << sphere.volume << "cm" << std::endl;
+
+    return 0;
+}
+
+Comments 
+   All done baby
