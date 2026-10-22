@@ -1,0 +1,30 @@
+Strings 
+    
+    Length or size: strName.length() or strName.Size()
+    
+    Check if empty: strName.empty()
+    
+    Check the memory space usage of string: strName.capacity()
+    
+    Resevre memory space for a string: strName.reserve()
+    
+    Concatenation: strName + strName2 or strName.append(strName2)
+
+    Get a character at an index: strName.at(index)
+
+    Extract a part into a new string: strName(startIndex, length)
+
+    Find a part of the string: strName.find(target)                 // Returns starting index or 18446744073709551615 if no matching cases found
+
+    Acess a character at an index: strName[index]
+
+    Get the first character: strName.front()
+
+    Get the last character: strName.back()
+
+    Clear the string: strName.clear()
+
+Next steps
+
+    1. Find more function and stuff 
+    2. Get ChatGPT or Claude to write in-depth meaning and usages on each of the functions in a basic manner
