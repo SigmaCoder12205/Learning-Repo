@@ -24,6 +24,17 @@ Strings
 
     Clear the string: strName.clear()
 
+    Push a Character to end of a string: strName.push_back(character)
+
+    Remove the last character of a string: strName.pop_back() 
+
+    Insert a specific string into an index: strName.insert(index, strName2)
+
+    Earse a section of a string: strName.earse(index, length)
+
+    Find the last occurrence of a string in a string: strName.rfind(target)
+
+
 Next steps
 
     1. Find more function and stuff 

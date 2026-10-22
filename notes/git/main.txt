@@ -7,6 +7,9 @@ git branch -M name: changes name of a branch
 git clone HTTPS: pulls all the files from a git repo 
 git pull: pulls the files from the web
 
+To check if you need changes to your git repo you use git fetch to download changes if there are any
+then get git status to show if you need to put the changes into the git repo
+
 Starting a git repo 
 
 1. git init 
