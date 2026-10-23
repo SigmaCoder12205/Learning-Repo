@@ -1,41 +1,35 @@
 Strings 
     
-    Length or size: strName.length() or strName.Size()
+    1. Length or size: strName.length() or strName.size()
     
-    Check if empty: strName.empty()
+    2. Check if empty: strName.empty()
     
-    Check the memory space usage of string: strName.capacity()
+    3. measures character capacity: strName.capacity()
     
-    Resevre memory space for a string: strName.reserve()
+    4. Resevre memory space for a string: strName.reserve()
     
-    Concatenation: strName + strName2 or strName.append(strName2)
+    5. Concatenation: strName + strName2 or strName.append(strName2)
 
-    Get a character at an index: strName.at(index)
+    6. Get a character at an index: strName.at(index)
 
-    Extract a part into a new string: strName(startIndex, length)
+    7. Extract a part into a new string: strName(startIndex, length)
 
-    Find a part of the string: strName.find(target)                 // Returns starting index or 18446744073709551615 if no matching cases found
+    8. Find a part of the string: strName.find(target)                 // Returns starting index or 18446744073709551615 if no matching cases found
 
-    Acess a character at an index: strName[index]
+    9. Acess a character at an index: strName[index]
 
-    Get the first character: strName.front()
+    10. Get the first character: strName.front()
 
-    Get the last character: strName.back()
+    11. Get the last character: strName.back()
 
-    Clear the string: strName.clear()
+    12. Clear the string: strName.clear()
 
-    Push a Character to end of a string: strName.push_back(character)
+    13. Push a Character to end of a string: strName.push_back(character)
 
-    Remove the last character of a string: strName.pop_back() 
+    14. Remove the last character of a string: strName.pop_back() 
 
-    Insert a specific string into an index: strName.insert(index, strName2)
+    15. Insert a specific string into an index: strName.insert(index, strName2)
 
-    Earse a section of a string: strName.earse(index, length)
+    16. Earse a section of a string: strName.earse(index, length)
 
-    Find the last occurrence of a string in a string: strName.rfind(target)
-
-
-Next steps
-
-    1. Find more function and stuff 
-    2. Get ChatGPT or Claude to write in-depth meaning and usages on each of the functions in a basic manner
+    17. Find the last occurrence of a string in a string: strName.rfind(target)
