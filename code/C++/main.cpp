@@ -1,12 +1,10 @@
 #include <iostream>
+#include <typeinfo>
+
+inline int square(int x) { return x * x; }
+
 
 int main(){
-    std::string name = "Archer";
-    std::string lastName = " Dragone";
-
-    name.pop_back();
-
-    std::cout << name << std::endl;
-    
+    std::cout << square(5) << std::endl;
     return 0;
 }

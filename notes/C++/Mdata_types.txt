@@ -1,0 +1,7 @@
+1. int: size: 4 bytes, description: whole numbers without decimals 
+2. char: size: 1 byte, description: single character
+3. bool: size: 1 byte, description: true (1), false (0) logical conditons
+4. float: size 4 bytes, description: better for handling small numbers
+5. double: size 8 bytes, description: better for larger numbers
+6. void: size N/A, description: represents no data 
+7. wchar_t, size: 2-4 bytes, description: used for non english character sets  

@@ -1,0 +1,109 @@
+1. auto: guess the data type based on what you have given it 
+2. const: makes something read only cant be changed
+3. constexpr: makes compiler do math at compile time not runtime
+4. nullptr: makes pointer null
+5. struct: kind of like a class but only for attributes
+6. virtual: allows child class to overide and change the function in OOP
+7. static: tells a class to remember the variable after the function is finshed
+8. inline: a hint to the compiler to copy and paste the functions actual code where its called 
+9. explicit: stops silent automatic type conversions helps with debugging. 
+10. using: gives a variable a easier nickname to type
+
+Helpful things
+
+
+1. explicit (The Guard Against Sneaky Conversions)
+
+By default, the C++ compiler tries to be "helpful." If a function expects a custom object, but you pass it a simple variable (like an integer), the compiler will look at your code and say: "Hey, I can automatically convert this number into that custom object behind the scenes!"
+This is called implicit conversion, and it often leads to silent bugs. explicit turns this "helpfulness" off.
+
+The Code Scenario:
+
+Imagine you are building a game and have a Square class. To make a square, you just need to give it a side length.
+cpp
+class Square {
+public:
+    int side_length;
+    
+    // CONSTRUCTOR (No explicit keyword yet)
+    Square(int size) {
+        side_length = size;
+    }
+};
+
+// A function that calculates area
+void print_area(Square s) {
+    int area = s.side_length * s.side_length;
+    std::cout << "Area is: " << area << "\n";
+}
+Use code with caution.
+
+The Problem:
+
+Because we didn't use explicit, the compiler allows this accidental code to run perfectly fine:
+cpp
+int main() {
+    // You accidentally pass a raw integer '5' instead of a Square object!
+    print_area(5); 
+}
+Use code with caution.
+The compiler silently looks at 5, notices the Square constructor takes an int, and silently creates a Square(5) for you. In a massive project, this means you can pass random numbers into functions by mistake, and the compiler won't warn you. It makes tracking down bugs a nightmare.
+
+The Fix:
+
+We add explicit to the constructor:
+cpp
+class Square {
+public:
+    int side_length;
+    
+    // Added explicit here!
+    explicit Square(int size) {
+        side_length = size;
+    }
+};
+Use code with caution.
+Now, if you try to type print_area(5);, the compiler refuses to build the app. It will give you a clear error: Cannot convert 'int' to 'Square'.
+To fix it, you are forced to be deliberate and intentional:
+cpp
+print_area(Square(5)); // This works! You are explicitly making a Square.
+
+
+
+
+2. inline (The Copy-Paste Performance Trick)
+
+When a computer runs a standard function, it has to do a lot of physical bookkeeping work:
+1. It pauses what it's currently doing.
+2. It jumps to a totally different location in your computer's memory where the function lives.
+3. It runs the function's code.
+4. It jumps all the way back to where it left off.
+If a function is tiny (like just adding two numbers) and you call it millions of times inside a game loop, those memory "jumps" waste a lot of time.
+
+The Code Scenario:
+
+cpp
+// A tiny function
+inline int double_number(int x) {
+    return x * 2;
+}
+
+int main() {
+    int health = 50;
+    
+    // Instead of jumping to the function memory...
+    int bonus = double_number(health); 
+}
+Use code with caution.
+
+What inline actually does:
+
+When you mark a function as inline, you are requesting the compiler to literally copy-paste the math directly into main() during compilation, eliminating the memory jump entirely.
+Behind the scenes, the compiler compiles your code to look exactly like this:
+cpp
+int main() {
+    int health = 50;
+    
+    // The compiler copy-pasted the math directly here! No memory jump needed.
+    int bonus = health * 2; 
+}
