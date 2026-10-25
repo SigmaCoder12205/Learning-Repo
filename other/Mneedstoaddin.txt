@@ -1,2 +1,0 @@
-1. How to compile code and that
-2. how to get types of functions
