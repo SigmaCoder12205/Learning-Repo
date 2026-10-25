@@ -1,0 +1,6 @@
+Maybe get ChatGPT or Claude to rewrite my orignal notes on Bro Codes video 
+Recrate all the project we did with Bro Code but just better and take notes
+
+Things to learn
+
+std::vector

@@ -1,10 +1,13 @@
 #include <iostream>
-#include <typeinfo>
-
-inline int square(int x) { return x * x; }
-
+#include <vector>
 
 int main(){
-    std::cout << square(5) << std::endl;
+    std::vector<int> numbers;
+
+    numbers.push_back(10);
+    numbers.push_back(20);
+
+    std::cout << numbers.empty() << std::endl;
+
     return 0;
 }

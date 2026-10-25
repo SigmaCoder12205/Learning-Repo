@@ -1,0 +1,44 @@
+Can be looped over with
+
+for(int i : vector){
+    std::cout << i << std::endl;
+}
+
+std::vector<int> numbers; // empty 
+std::vector<int> numbers = {1, 2, 3, 4, 5}; // pre assingn
+std::vector<int> numbers(10); // given 10 values all set to 0
+std::vector<int> numbers numbers(69, 10); 10 elements all set to 69
+
+Functions 
+
+.push_back(value): adds a value to the end of a vector
+.pop_back(): removes last value in the vector
+.emplace_back(): faster than push_back
+
+Accessing stuff
+
+vector[index]: fast and direct no boundary checks 
+
+Boundary check is where it checks if you can get the data at that index, if there isn't a boundary check
+then it can be accessed faster but less secure, becasue it can lead to an undefiend behaviour
+
+vector.at(index): does have boundary check a little bit slower than vector[inde]
+vector.front(index): get's first element in the vector
+vector.back(index): get's the last element in the vector
+
+Size and Capcity stuff
+
+vector.size(): tells you how many elements that are (accurate)
+vector.empty(): checks if empty returns 0 for not empty and 1 for true is empty 
+vector.reserve(n): n for how many elements you want to spare up in memory in because it usually does it automatically
+                   which wastes time so you can prevent it by doing this
+
+Power of Vectors: Algorithms
+
+std::sort(vector.begin(), vector.end());
+
+Sorts the vector
+
+std::reverse(vector.begin(), vector.end()); 
+
+reverses the vector
