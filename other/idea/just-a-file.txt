@@ -1,0 +1,37 @@
+Order of things I want to learn
+
+1. Learn and get into technical stuff like in programming (Like C++, Networking, Graphics, Machine Learning)
+2. Learn hardware kind of stuff that's also technical (Building Home Severs, Building My Own PC, Getting a Flipper Zero,
+                                                       Learn Stuff For Making Drones)
+3. Really learn and get into the things that I really want to learn
+
+Order of things I want to buy
+
+1. Data (Hard drives, SSDS) 
+2. Home sever
+3. Hardware Parts (Like Rasberry Pi's, adurinos etc)
+4. Build a PC
+5. New Drone
+
+Things to do right now
+
+1. Try and make yourself and secure as possible already got Tailscale and Proton working together let's keep going
+
+Order of things I want to do
+
+1. Spend a whole lotta time planing a cool as game called (il mondo)
+2. 
+
+
+
+
+
+OI!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! LOOK AT THIS
+
+    dpkg installs Debian package manager.
+    This is useful for those who want to create/modify DEB files.
+    However, *do not* use dpkg to install Debian packages in your ArchLinux machine.
+    This will break your system!
+    You will need to go back to Arch wiki and read the installation guide again.
+    You've been warned!
+
