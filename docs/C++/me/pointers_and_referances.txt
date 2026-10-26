@@ -1,0 +1,47 @@
+References 
+
+Code 
+
+#include <iostream>
+#include <vector>
+
+int main(){
+    int x = 1;
+    int& ref = x;
+    
+    std::cout << x << std::endl;
+    std::cout << ref << std::endl;
+    return 0;
+}
+
+
+References is another name for a variable, must be intialised when made, cant be reassinged to a differnet variable, 
+can't be null, to change the variable it points to datas you just do 
+
+ref = value or whatever // changes the orignal data it points to 
+
+Pointers 
+
+Code 
+
+#include <iostream>
+#include <vector>
+
+int main(){
+    int x = 10;
+    int* ptr = &x;
+
+    std::cout << x << std::endl;
+    std::cout << *ptr << std::endl;
+    return 0;
+}
+
+Pointers also point to a memory address, it can be reassinged to a differnet variable, 
+can be null, you have to derefernce with * then change it data if you want it, derefernce a null 
+pointer can lead to undefined behaviour 
+
+int x = 10;
+
+int* ptr = &x; // & obtains the address of x
+int& ref = x;  // & declares a reference
+int y = *ptr;  // * dereferences the pointer
