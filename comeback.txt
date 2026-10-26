@@ -1,1 +1,1 @@
-Do Pointers and References then memory after
+Do memory
