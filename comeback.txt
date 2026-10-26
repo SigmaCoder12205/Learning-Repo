@@ -1,1 +1,1 @@
-Keep working on vectors
+Do Pointers and References then memory after
