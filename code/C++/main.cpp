@@ -1,10 +1,16 @@
 #include <iostream>
-#include <vector>
+
+void makeTable();
+
 
 int main(){
-    const int x = 10;
-    
-    std::cout << &x << std::endl;
+    int *ptr = new int(20); // On the heap
+
+    delete ptr; // clears the space you were givin
 
     return 0;
+}
+
+void makeTable(){
+    int nails = 9; // On the stack
 }

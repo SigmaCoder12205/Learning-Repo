@@ -1,0 +1,56 @@
+Memory with Meatphors 
+
+The Stack is your crasftmen worbech, when you start something (function) you grab the tools and materials
+you need and lay them out in front of you. When the task is done you clear it for the next task.
+
+It's super fast because everything is at arms reach. Although it only has a limted space, 
+if you try to put too many things on it your bench breaks, called a Stack Overflow.
+
+Code 
+
+#include <iostream>
+
+void makeTable();
+
+
+int main(){
+
+    return 0;
+}
+
+void makeTable(){
+    int nails = 9; // On the stack
+}
+
+The Heap is the giant floor of the warehouse, if you need to build something massive and you don't
+know how big it will get, you can't pull it onto your workbench, you have to request a specifc plot
+on the floor. You'll get a pice of paper telling you where your project is (A pointer). The warehouse 
+staff won't clean up for you, if you leave the project there this wastes space forever, this is a memory leak
+if you lose the picece of paper you can never find that space up.
+
+Code 
+
+#include <iostream>
+
+void makeTable();
+
+
+int main(){
+    int *ptr = new int(20); // On the heap
+
+    delete ptr; // clears the space you were givin
+
+    return 0;
+}
+
+void makeTable(){
+    int nails = 9; // On the stack
+}
+
+Data Segment
+
+The Data Segment is the like the shelvs on the warehouse walls. these shevels 
+stay there all day, when the warehouse opens up to when it closes. these items 
+are placed on the shevels before any works begins, and never get cleared until the warehouse
+shutsdown.
+
