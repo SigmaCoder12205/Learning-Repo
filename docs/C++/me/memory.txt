@@ -54,3 +54,98 @@ stay there all day, when the warehouse opens up to when it closes. these items
 are placed on the shevels before any works begins, and never get cleared until the warehouse
 shutsdown.
 
+Acuatly Explained 
+
+The Stack is like your immediate office desk.
+
+It is incredibly organized, items are within arm's reach, and things are handled in a strict order: Last-In, First-Out (LIFO).
+
+Imagine you are stacking papers on top of each other.
+
+You can only work on the piece of paper at the very top of the pile.
+
+When you are done with it, you throw it away, revealing the next paper underneath.
+
+• How it works:
+    When you start a function, C++ slaps a stack of papers (variables) onto your desk.
+    When the function ends (at the closing } curly bracket), C++ throws that whole stack of papers into the shredder for you.
+
+• The Catch:
+    Your desk is very small.
+    If you try to stack 1,000,000 papers on it all at once, the pile will fall over and ruin everything.
+    This is called a Stack Overflow.
+
+The Heap is a massive storage warehouse down the street.
+It has endless amounts of space, but it takes longer to get things in and out of it because you have to use a delivery truck.
+
+To use the warehouse, you must use a Pointer.
+A pointer is just a tiny slip of paper (stored on your desk) that has the warehouse address written on it.
+
+• How it works:
+    You use the word new to tell the warehouse manager to reserve space for you.
+• The Catch:
+    Because the warehouse manager doesn't know what you are doing back at your desk,
+    they will never automatically clean up your space.
+    You must explicitly use the word delete to tell them to empty your storage unit.
+
+
+Kind of Explained 
+
+
+The Reality of RAM: A Massive Grid of Numbers
+
+To the computer, your RAM is just a giant, single-file line of billions of tiny mailboxes.
+• Each mailbox holds 1 byte of data.
+• Each mailbox has a unique number (Address) written on it.
+
+When you create an integer variable in C++ (int x = 5;),
+the computer reserves a block of 4 bytes (4 mailboxes) in a row and writes the binary representation of 5 inside them.
+
+
+Deep Dive: How the Stack Actually Works
+
+The stack isn’t just a concept—it is a physical strategy used by your computer's CPU to run code quickly.
+When your program starts, the Operating System reserves a small, continuous block of memory addresses specifically for the stack.
+The CPU has a built-in helper called the Stack Pointer,
+which is just a register that keeps track of the current memory address at the top of the stack.
+
+
+When you call a function, this happens instantly in the hardware:
+
+1. The Move: The CPU simply shifts the Stack Pointer down by a certain number of bytes to make room.
+   If a function needs three integers (4 bytes each), the pointer moves by 12 bytes.
+
+2. The Fast Write: The CPU writes the data directly into those memory addresses.
+
+3. The Clean Up: When the function reaches }, the CPU shifts the Stack Pointer right back to where it was before.
+
+Why you don't need to "delete" the Stack:
+The data isn't actually erased or wiped to zero when a function ends. The CPU just moves its pointer back up.
+Those memory addresses are now considered "empty space,"
+and the next function you call will simply overwrite whatever was left behind.
+This is why the stack is blindingly fast—it requires zero calculation or searching for space.
+
+Deep Dive: How the Heap Actually Works
+
+Unlike the stack, the heap is not a continuous block of memory,
+and the CPU doesn't have a magical pointer tracking it.
+The heap is just whatever RAM is left over on your computer.
+
+When you type new int, your program has to pause, leave the super-fast CPU cycle,
+and talk to the Operating System's Memory Manager:
+
+1. The Search: Your program asks the OS, "Hey, I need 4 bytes of free RAM somewhere."
+
+2. The Map: The OS looks at its massive map of all available RAM on your PC,
+   finds a random 4-byte gap that isn't being used by Discord, Spotify, or Windows, and marks it as "taken."
+
+3. The Return: The OS hands your program the exact memory address of that random gap (e.g., address 0x7fff5fbff614).
+
+4. The Pointer: You store that address inside a pointer variable on your stack.
+
+Why you MUST manually "delete" the Heap:
+Because the OS gave you a random chunk of memory from its master map, it has no idea what you are doing with it.
+It doesn't know when your functions start or end.
+If you lose the piece of paper (pointer) containing that address, the OS still thinks you are actively using that space.
+It will stay locked and unusable forever (a memory leak) until you explicitly call delete to tell the OS,
+"You can have address 0x7fff5fbff614 back now."
