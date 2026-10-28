@@ -1,0 +1,23 @@
+This is how you open a file
+
+#include <iostream>
+#include <fstream>
+
+int main(){
+    std::ifstream inputFile("/home/arch/Projects/Learning-Repo/code/data/test.txt");
+
+    if(!inputFile.is_open()){
+        std::cout << "Could not open the file" << std::endl;
+        return 1;
+    }
+    else{
+        std::cout << "Opened File" << std::endl;
+    }
+
+    inputFile.close();
+
+    return 0;
+}
+
+Pretty much just checks if we can open the file or not, you must include fstream as a header tho
+
