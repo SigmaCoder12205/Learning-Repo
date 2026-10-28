@@ -1,0 +1,35 @@
+argc = an argument count of how many items were typed into the command to run the program
+
+Example 
+
+int main(int argc, char *argv[]){
+    std::cout << argc << std::endl;
+}
+
+Command to Run: Compile: g++ main.cpp -o main, Run: ./main poop poop
+
+Returns:
+    3 
+    because ./main is included as well
+
+argv = an array of all the elements passed in 
+
+Example 
+
+#include <iostream>
+
+int main(int argc, char *argv[]){
+    for(int i = 0; i<=argc; i++){
+        std::cout << argv[i] << std::endl;
+    }
+
+    return 0;
+}
+
+Command to Run: Compile: g++ main.cpp -o main, Run: ./main poop poop
+
+Returns:
+    ./main
+    poop
+    poop
+

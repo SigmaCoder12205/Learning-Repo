@@ -54,11 +54,14 @@ stay there all day, when the warehouse opens up to when it closes. these items
 are placed on the shevels before any works begins, and never get cleared until the warehouse
 shutsdown.
 
+------------------------------------- AI COPIED AND PASTED --------------------------------------
+
 Acuatly Explained 
 
 The Stack is like your immediate office desk.
 
-It is incredibly organized, items are within arm's reach, and things are handled in a strict order: Last-In, First-Out (LIFO).
+It is incredibly organized, items are within arm's reach,
+and things are handled in a strict order: Last-In, First-Out (LIFO).
 
 Imagine you are stacking papers on top of each other.
 
