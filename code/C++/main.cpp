@@ -1,23 +1,19 @@
 #include <iostream>
-#include <fstream>
+
+struct Human {
+  int age;
+  bool hungry;
+};
 
 int main() {
-    // Opens a new file (or wipes an existing one clean)
-    std::ofstream csvFile("/home/arch/Projects/Learning-Repo/code/data/test.csv");
+  Human human;
 
-    if (!csvFile.is_open()) {
-        std::cerr << "Error opening file!" << std::endl;
-        return 1;
-    }
+  human.age = 13;
+  human.hungry = true;
 
-    // 1. Write the Header Row
-    csvFile << "ID,Name,Language,City\n";
+  std::cout << human.age << std::endl;
 
-    // 2. Write Data Rows
-    csvFile << "1,Archer,C++,Sydney\n";
-    csvFile << "2,Linus,C,\"Portland, Oregon\"\n"; // Note: Quotes used because City contains a comma
+  std::cout << "Hello World" << std::endl;
 
-    csvFile.close();
-    std::cout << "New CSV created successfully." << std::endl;
-    return 0;
+  return 0;
 }
