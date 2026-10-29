@@ -21,3 +21,58 @@ int main(){
 
 Pretty much just checks if we can open the file or not, you must include fstream as a header tho
 
+This is how read a file
+
+Code 
+
+#include <iostream>
+#include <fstream>
+
+int main(){
+    std::ifstream inputFile("/home/arch/Projects/Learning-Repo/code/data/test.txt");
+
+    if(!inputFile.is_open()){
+        std::cout << "Could not open the file" << std::endl;
+        return 1;
+    }
+
+    std::string line;
+
+    while(std::getline(inputFile, line)){
+        std::cout << line << std::endl;
+    }
+
+    inputFile.close();
+
+    return 0;
+}
+
+
+This is how to write to a new file
+
+Code 
+
+#include <iostream>
+#include <fstream>
+
+int main(){
+    std::ofstream outputfile("test.txt");
+
+    if(!outputfile.is_open()){
+        std::cout << "Could not open the file" << std::endl;
+        return 1;
+    }
+
+    outputfile << "Hello\n";
+    outputfile << "My Name is Archer\n";
+    outputfile << "This is an int: " << 42;
+
+    outputfile.close();
+
+    std::cout << "Data Wrote successfully" << std::endl;
+
+    return 0;
+}
+
+
+I would continue on CSV's and JSON's but it's too hard maybe something to come back to

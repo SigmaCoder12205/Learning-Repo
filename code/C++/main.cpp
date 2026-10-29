@@ -1,21 +1,23 @@
 #include <iostream>
 #include <fstream>
 
-int main(){
-    std::ifstream inputFile("/home/arch/Projects/Learning-Repo/code/data/test.txt");
+int main() {
+    // Opens a new file (or wipes an existing one clean)
+    std::ofstream csvFile("/home/arch/Projects/Learning-Repo/code/data/test.csv");
 
-    if(!inputFile.is_open()){
-        std::cout << "Could not open the file" << std::endl;
+    if (!csvFile.is_open()) {
+        std::cerr << "Error opening file!" << std::endl;
         return 1;
     }
 
-    std::string line;
+    // 1. Write the Header Row
+    csvFile << "ID,Name,Language,City\n";
 
-    while(std::getline(inputFile, line)){
-        std::cout << line << std::endl;
-    }
+    // 2. Write Data Rows
+    csvFile << "1,Archer,C++,Sydney\n";
+    csvFile << "2,Linus,C,\"Portland, Oregon\"\n"; // Note: Quotes used because City contains a comma
 
-    inputFile.close();
-
+    csvFile.close();
+    std::cout << "New CSV created successfully." << std::endl;
     return 0;
 }

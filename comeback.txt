@@ -1,6 +1,27 @@
-If you want get chatgpt to explain argc and argv then if you skip that just go to files handling like
+Linux basic commands
 
-1. Opening a file
-2. Reading a file 
-3. Writing a file
-4. Check weather a file exists q
+such as 
+
+pwd
+ls
+cd
+mkdir
+touch
+cat
+cp
+mv
+rm
+
+and 
+
+.
+..
+/
+~
+
+and basic envirourment variables
+
+
+THINGS TO MAYBE DO
+
+1. Talk about CSV'S and JSON'S my self in files.txt
