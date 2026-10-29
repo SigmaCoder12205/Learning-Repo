@@ -3,4 +3,4 @@ If you want get chatgpt to explain argc and argv then if you skip that just go t
 1. Opening a file
 2. Reading a file 
 3. Writing a file
-4. Check weather a file exists 
+4. Check weather a file exists q
