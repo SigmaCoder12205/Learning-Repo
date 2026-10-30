@@ -1,0 +1,26 @@
+1. pwd: stands for print working directory, it job is to display what folder your currently in
+2. ls: it's job is to print files and folders in the current folder
+3. cd: changes directory into a new directory
+4. mkdir: makes a new folder 
+5. touch: if a file doesn't exist it makes a new file, else updates it timestamps to the current date and time
+6. cat: short for concatenate is for reading and displaying files 
+7. cp: meant for copying files and directories from one place to another 
+8. mv: can rename a file if in the same folder or it can move it to a new location 
+9. rm: removes files 
+
+. means just the current working directory
+.. means the parent directory one level above your current working directory
+/ means the top of the hierarchy in linux every file and folder is under the / 
+~ represents the users home directory
+
+envirourment variable: just a variable that the entire system looks to, it likes a programming langue variable instead of typing 
+                       the entire thing you can just type in the envirourment variable
+
+Basic envirourment variables:
+    $PATH: A colon-separated list of directories where the system looks for executable commands.
+    $HOME: The absolute path to the current user's home directory.
+    $USER: The username the currently logged-in user
+    $SHELL: The path to the active shell binary.
+    $PWD: The absolute path to the present working directory.
+    $EDITOR: The user's preferred text editor for system commands.
+    $LANG: The system language and locale settings.
