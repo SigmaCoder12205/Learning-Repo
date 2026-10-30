@@ -1,0 +1,20 @@
+What is a process?
+
+    a process in a program in excution
+    like main that you can run like ./main
+    The moment you run that file the OS starts
+    loading it into memory, allcates resources, 
+    and makes it a running process.
+
+    What's in a process
+
+    Address Space: A dedicated block of RAM allcated by the OS, one process cannot
+                   read or write another processes memory by default
+    
+    Code: The compiled machine instructions of the C++ code.
+
+    Data Segments: your gobal and static variable 
+
+    The Heap: Dymaciclly allocated memory
+
+    The Stack: ...

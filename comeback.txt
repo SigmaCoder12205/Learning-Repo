@@ -1,25 +1,12 @@
-Linux basic commands
+Processes 
 
-such as 
-
-pwd
-ls
-cd
-mkdir
-touch
-cat
-cp
-mv
-rm
-
-and 
-
-.
-..
-/
-~
-
-and basic envirourment variables
+What is a process?
+What does it mean to launch a program?
+Parent vs child process
+Process ID (PID)
+What does fork() do?
+What does exec() do?
+What does wait() do?
 
 
 THINGS TO MAYBE DO
