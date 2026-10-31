@@ -17,4 +17,98 @@ What is a process?
 
     The Heap: Dymaciclly allocated memory
 
-    The Stack: ...
+    The Stack: Has local variables, arguments and return addresses 
+
+    Registers: CPU state data, inclduing the program counter (which tracks which line of code is excuting next)
+
+    OS resources: Open file descriptors, network sockets, and secutrity permissions
+
+
+What does it mean to lanuch a program
+
+It turns static code on your disk into an active process in your computers memory
+
+4 steps to lanuching a program
+
+1. Finding and Reading: The OS goes to your disk and locates the executable and reads it header to understand how much memory it needs
+
+2. Allcating Memory: The OS makes room for a brand-new isolated address space in RAM.
+                     It sets up boundaries for the programs stack, heap and data segments
+
+3. Loading: The OS copies the compiled machine code from the disk into that newly allcated ram 
+
+4. Executing: The OS sets the CPU program counter to the entry point of the program and hands over control
+              now the program is offically running
+
+Difference between child process and parent process
+
+A parent process is an existing process that creates a new process (called a child process)
+using a system call like fork(), while a child process is the new subprocess as a copy or derivative of 
+that parent.
+
+Differences 
+
+1. Creation and Control: The parent process initates the child process and manages or monitors it's exetion.
+                         The child process executes tasks often concurrently with the parent
+
+2. Hierarchy and Quantity: A parent process can have multiple child processes. 
+                           However a standard child process has only one parent process.
+
+3. Return values(fork()): When a fork() call succeeds, the parent process receives 
+                          the Process ID (PID) of the child, whereas the child process receives 0.
+
+4. Termination Signal: When a child process finshes or exits, it sends a termination signal 
+                       (such as SIGCHLD in UNIX-like systems) back to it's parent process.
+
+5. Resources Inheritance: A child process initally iherits a copy of the parent's address space,
+                          open files, and envirourment attributes, though they operate in separte memory spaces
+
+Example
+
+#include <iostream>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int main() {
+    // Fork the process to create a child process
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        // Fork failed
+        std::cerr << "Fork failed!" << std::endl;
+        return 1;
+    } 
+    else if (pid == 0) {
+        // Child process execution
+        // fork() returns 0 to the child process
+        std::cout << "[Child Process] Hello from the child! My PID is: " << getpid() << std::endl;
+        std::cout << "[Child Process] My parent's PID is: " << getppid() << std::endl;
+    } 
+    else {
+        // Parent process execution
+        // fork() returns the child's PID to the parent process
+        std::cout << "[Parent Process] Hello from the parent! My PID is: " << getpid() << std::endl;
+        std::cout << "[Parent Process] I spawned a child with PID: " << pid << std::endl;
+
+        // Wait for the child process to finish before exiting
+        wait(nullptr);
+        std::cout << "[Parent Process] Child has terminated. Parent exiting." << std::endl;
+    }
+
+    return 0;
+}
+
+How it works: 
+
+    fork() splitting: The exact moment fork() is called, the OS duplicates the current process.
+                      Two identical programs now run from that exact line forward.
+    
+    The Return Value (pid): The system uses the value of pid to let each process know
+                            it's identity. The parent gets the child actual ID numbers
+                            while the child gets a flat 0.
+    
+    wait(nullptr): This keeps the parent process paused until the child process completes its work.
+                   This prevents the child from turing into a zombie process (a finshed process 
+                   whose exit status hasn't been read by it's parent)
+
