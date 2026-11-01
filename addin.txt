@@ -1,0 +1,39 @@
+how to take an input in C++ and assign it to a value
+where you don't know the data type
+
+Code example 
+
+#include <iostream>
+#include <string>
+#include <sstream>
+
+int main() {
+    std::string input;
+    std::cout << "Enter something: ";
+    std::cin >> input; // Or use std::getline(std::cin, input) for spaces
+
+    // Check if it's an integer
+    std::stringstream ss(input);
+    int intValue;
+    if (ss >> intValue && ss.eof()) {
+        std::cout << "Detected type: Integer (" << intValue << ")\n";
+        return 0;
+    }
+
+    // Reset stream to check if it's a double
+    ss.clear();
+    ss.str(input);
+    double doubleValue;
+    if (ss >> doubleValue && ss.eof()) {
+        std::cout << "Detected type: Double/Float (" << doubleValue << ")\n";
+        return 0;
+    }
+
+    // Fallback: It remains a string
+    std::cout << "Detected type: String (" << input << ")\n";
+}
+
+
+how to clear input buffer in C++
+
+std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
