@@ -37,3 +37,7 @@ int main() {
 how to clear input buffer in C++
 
 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+are std::vector pass by ref or value
+
+yes std::vector is pass by value by defualt

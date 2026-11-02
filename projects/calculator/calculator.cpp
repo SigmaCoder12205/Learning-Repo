@@ -4,10 +4,10 @@
 #include <sstream>
 #include <limits>
 
-void add();
-void subtract();
-void multiple();
-void divide();
+double add(std::vector<double> numbers);
+double subtract(std::vector<double> numbers);
+double multiple(std::vector<double> numbers);
+double divide(std::vector<double> numbers);
 
 int main(){
     char operation;
@@ -44,9 +44,70 @@ int main(){
         }
     }
 
-    for(auto value : numbers){
-        std::cout << value << std::endl;
+    switch (operation){
+    case '+': 
+        std::cout <<add(numbers) << std::endl;
+    break;
+
+    case '-':
+        std::cout << subtract(numbers) << std::endl;
+    break;
+
+    case '*':
+        std::cout << multiple(numbers) << std::endl;
+    break;
+    
+    case '/':
+        std::cout << divide(numbers) << std::endl;
+    break;
+
+    default:
+        break;
     }
 
     return 0;
+}
+
+double add(std::vector<double> numbers){
+    double total;
+
+    for(int i = 0; i < numbers.size(); i++){
+        total += numbers[i];
+    }
+
+    return total;
+}
+
+double subtract(std::vector<double> numbers){
+    double total;
+
+    total = numbers[0] - numbers[1];
+
+    for(int i = 2; i < numbers.size(); i++){
+        total -= numbers[i];
+    }
+
+    return total;
+}
+
+double multiple(std::vector<double> numbers){
+    double total = 1;
+
+    for(int i = 0; i < numbers.size(); i++){
+        total *= numbers[i];
+    }
+
+    return total;
+}
+
+double divide(std::vector<double> numbers){
+    double total;
+
+    total = numbers[0] / numbers[1];
+
+    for(int i = 2; i< numbers.size(); i++){
+        total /= numbers[i];
+    }
+
+    return total;
 }

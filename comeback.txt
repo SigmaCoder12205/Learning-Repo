@@ -1,13 +1,11 @@
-Processes 
+System Calls
 
-What is a process?
-What does it mean to launch a program?
-Parent vs child process
-Process ID (PID)
-What does fork() do?
-What does exec() do?
-What does wait() do?
+Understand that a normal program can ask the Linux kernel to do things such as:
 
+create process
+open file
+read file
+write file
 
 THINGS TO MAYBE DO
 
