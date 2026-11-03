@@ -1,10 +1,5 @@
-System Calls
+get codex to make a testing program that I can pass in any C++ program and it'll bench mark it
 
-Understand that a normal program can ask the Linux kernel to do things such as:
-
-create process
-read file
-write file
 
 THINGS TO MAYBE DO
 
