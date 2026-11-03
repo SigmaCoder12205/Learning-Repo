@@ -3,10 +3,10 @@ System Calls
 Understand that a normal program can ask the Linux kernel to do things such as:
 
 create process
-open file
 read file
 write file
 
 THINGS TO MAYBE DO
 
 1. Talk about CSV'S and JSON'S my self in files.txt
+2. Continue on at input/output.txt and talk about stdin, stdout and stderr

@@ -1,0 +1,23 @@
+What is stdin?
+
+In C++, stdin (Standard Input) acts as a data stream managed by the Operating System (OS) 
+that feeds dynamic runtime data into your program. 
+By default, this stream pulls data from your keyboard, but it can also be redirected to read from files,
+network sockets, or the output of another program
+
+Behind the scenes, C++ interacts with this stream using two primary abstractions:
+
+the C-style stdin pointer and the C++ object-oriented std::cin
+
+
+1. The Low-Level Architecture (The OS Layer)
+
+Every time a process launches, the OS automatically maps three standard I/O pipes to it using specific integer
+tags called File Descriptors:
+• File Descriptor 0: stdin (Standard Input)
+• File Descriptor 1: stdout (Standard Output)
+• File Descriptor 2: stderr (Standard Error)
+
+When you type into a console, the OS stores those keystrokes inside an input buffer
+(a dedicated slice of RAM allocated to your process).
+This data sits in the buffer until your program executes a system call (like a POSIX read) to pull the bytes out.
