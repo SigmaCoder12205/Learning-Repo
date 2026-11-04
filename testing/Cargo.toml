@@ -1,6 +1,6 @@
 [package]
 name = "cppbench"
-version = "0.2.0"
+version = "0.4.1"
 edition = "2021"
 description = "Native Rust and C process benchmark CLI for Linux"
 license = "MIT"
@@ -10,6 +10,7 @@ build = "build.rs"
 clap = { version = "4", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
+roxmltree = "0.20"
 
 [build-dependencies]
 cc = "1"

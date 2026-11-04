@@ -1,0 +1,9 @@
+{
+  "period": {"duration": 6.778809, "unit": "ms"},
+  "engines": {
+    "Render/3D": {"busy": 84.923030, "unit": "%"},
+    "Blitter": {"busy": 0.000000, "unit": "%"},
+    "Video": {"busy": 0.000000, "unit": "%"},
+    "VideoEnhance": {"busy": 0.000000, "unit": "%"}
+  }
+}

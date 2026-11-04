@@ -1,12 +1,12 @@
 # cppbench
 
-A native **Rust + C** command-line benchmark tool for Linux. Pass an executable path to get all 15 metrics and their statistics:
+A native **Rust + C** command-line benchmark tool for Linux. Pass an executable path for a simple overview:
 
 ```bash
 cppbench /path/to/your/program
 ```
 
-The default is one warmup followed by ten measured invocations. All metrics are shown: timing, CPU, peak memory, page faults, filesystem I/O counters, context switches, output sizes, and throughput. Each metric includes count, mean, median, min, max, sample standard deviation, p90, p95, and coefficient of variation.
+The default is one warmup followed by ten measured invocations. The overview shows average time, highest peak memory, average CPU usage, GPU availability, throughput, output sizes, and timing variation. Use `--intermediate` for resource ranges or `--advanced` for all 15 metrics, full statistics, and individual runs.
 
 Rust handles the CLI, statistics, correctness checks, and reports. C handles process launch, monotonic timing, Linux `wait4` resource accounting, deadlines, and process-group cleanup. The C code is linked into the native executable. **No Python interpreter, wrapper, or runtime is used.**
 
@@ -37,6 +37,22 @@ After changing the tool, run `make install` again. The installed binary works in
 
 ## Usage
 
+### Choose the detail level
+
+```bash
+cppbench ./program                 # Simple overview (default)
+cppbench ./program --intermediate  # Resource breakdown, averages, and ranges
+cppbench ./program --advanced      # Every statistic, configuration, and individual run
+```
+
+Alternatively, use `--view simple`, `--view intermediate`, or `--view advanced`. Choose one view flag per invocation. Views change text presentation; JSON and CSV retain all selected data.
+
+The simple overview uses readable time and memory units. Time is the average elapsed time per successful run. Memory is the **highest peak RSS across successful runs**, not an average allocation size. CPU usage is the average of per-run CPU/wall percentages: 100% means one fully occupied core, and multithreaded workloads can exceed 100%. Throughput and output sizes are averages per run. Time variation is the coefficient of variation; one successful run is insufficient to estimate variation.
+
+GPU activity is available with `--gpu`, using `intel_gpu_top` during an extra diagnostic run. The report shows per-engine device-wide percentages, not a fabricated single percentage or target-only attribution. Without monitoring, permissions, or complete samples, it reports an explicit unavailable reason. Choosing a view alone does not enable any external tool.
+
+Intermediate view adds user/system CPU time and filesystem I/O operations, with average/minimum/maximum values. Advanced view includes all metric statistics, execution settings, and individual warmup and measured-run values. Failures and diagnostic notes appear at every level; if no runs succeed, the overview explicitly says that no resource summary is available.
+
 ### Benchmark an existing project
 
 Build with your normal build system, then pass the resulting executable:
@@ -60,7 +76,7 @@ cppbench ./program --metrics io,scheduling
 cppbench --list-metrics
 ```
 
-`--metrics all` is the default. Selection filters text, JSON, and CSV; OS resource counters are collected together regardless of selection. Duplicate selections are removed.
+All 15 metrics are collected by default, while the text view chooses how much to display. An explicit `--metrics` selection overrides the view's default metric rows and filters JSON/CSV too. For example, `--metrics wall` shows only time-related results in any text view; `--metrics all` shows every metric even with simple formatting. OS resource counters are collected together regardless of selection. Duplicate selections are removed.
 
 ### Save reports
 
@@ -69,9 +85,57 @@ cppbench ./program --format json --output results.json
 cppbench ./program --metrics wall,cpu,rss --format csv --output results.csv
 ```
 
-Text prints a complete statistical summary and failure diagnostics. JSON records settings, host metadata, compiler information when applicable, individual warmups and measured runs, metric units, summaries, and diagnostic previews. CSV has one row per measured invocation, including status, exit code, and selected metrics; it excludes warmups and summary statistics. Use JSON for the full record.
+Text prints the chosen detail level and failure diagnostics. JSON records settings, host metadata, compiler information when applicable, individual warmups and measured runs, metric units, summaries, GPU availability, and diagnostic previews. CSV has one row per measured invocation, including status, exit code, and selected metrics; it excludes warmups and summary statistics. Use JSON for the full record. View flags do not reduce export detail.
 
 Reports go to stdout unless `--output` is specified. The file's parent directory must exist; an existing report file is overwritten. Commands and stderr may contain program-supplied sensitive data. Environment override keys are recorded, while values are omitted.
+
+### CPU counters, GPU monitoring, allocations, and memory errors
+
+```bash
+cppbench ./program --perf
+cppbench ./program --gpu
+cppbench ./program --heaptrack
+cppbench ./program --valgrind
+cppbench ./program --all-tools --advanced
+
+cppbench ./program --perf --valgrind --diagnostic-timeout 300 \
+  --artifacts-dir ./profiles --format json --output results.json -- --size 1000000
+```
+
+These options require the corresponding tools on PATH: `perf`, `intel_gpu_top` (Arch package `intel-gpu-tools`), `heaptrack` plus `heaptrack_print`, and `valgrind`. On Arch, install them with `sudo pacman -Syu --needed perf intel-gpu-tools heaptrack valgrind`.
+
+**Each enabled tool replays the target once after all baseline runs succeed.** `--all-tools` can therefore run the target four extra times. The input file is reopened; target arguments, cwd, and expected exit status are reused. Programs with side effects repeat those side effects. Tool time and memory are excluded from baseline statistics. Each tool/analysis command has its own `--diagnostic-timeout` (default 120 seconds). Interrupted diagnostics stop subsequent tools and retain the baseline report; a failed tool does not prevent the other requested tools from running.
+
+Diagnostics set `LC_ALL=C` for stable parsing, including the target during those passes. The baseline retains your original locale. Configured debuginfod access is inherited: Valgrind may need it to obtain loader/library debug symbols. Heaptrack may disable debuginfod during recording according to its own policy. Build your program with `-g` for useful source locations; optimized programs are supported, though optimization can obscure stack traces or eliminate allocations.
+
+| Tool flag | What is reported | Scope and limits |
+| --- | --- | --- |
+| `--perf` | Counter values, instructions per cycle, cache miss percentage, branch miss percentage | Default events count user-space activity in an instrumented replay. Unsupported counters remain null. Multiplexing coverage is retained; derived ratios can be affected by scaling. |
+| `--gpu` | Average, peak, and distribution of activity for each Intel GPU engine | Device-wide sampling during a diagnostic session, including startup/shutdown. Other GPU clients contribute. This does not measure target-only GPU activity or GPU memory. |
+| `--heaptrack` | Allocation call count, temporary allocations, approximate peak heap and retained bytes | Separate instrumented replay. Printed byte sizes are rounded estimates; retained allocations alone do not prove a bug. Trace and top allocation stack reports are saved. |
+| `--valgrind` | Memcheck error contexts, occurrences by kind, leak bytes, and stack traces | Target process only: exec children are not traced and post-fork child reports are silenced. Still-reachable allocations are reported without failing the check. Other reported memory-error/leak contexts produce `findings`. |
+
+Select CPU events with `--perf-events cycles:u,instructions:u,branches:u,branch-misses:u`. Defaults also include `cache-references:u,cache-misses:u`. Hardware/kernel support varies; unavailable events are never silently reported as zero. See the [perf stat manual](https://man.archlinux.org/man/perf-stat.1.en).
+
+GPU sampling defaults to 100 ms. Use `--gpu-interval-ms 50` to sample more frequently (allowed: 10–60000 ms), and `--gpu-device drm:/dev/dri/card1` to choose a device. The first sample is discarded as a baseline. A program lasting only a few milliseconds can exit before any complete sampling interval. In that case the report says the sampling window was too short (`reason_code: insufficient_samples`), rather than reporting zero activity or a format error. Increase the amount of work per invocation, or try `--gpu-interval-ms 10`; even that cannot guarantee useful samples from a very short run. `intel_gpu_top` must support the active Intel driver. This integration does not support NVIDIA/AMD or Intel Xe devices requiring a different monitoring tool. See the [intel_gpu_top manual](https://man.archlinux.org/man/intel_gpu_top.1.en).
+
+The monitor's entire JSON output is captured separately from target stdout. This accommodates releases that otherwise write array brackets to stdout while sending sample objects to `-o FILE`. The parser also accepts single-object, comma-separated, and concatenated-object logs. The report retains raw-file and invocation information when JSON parsing fails. GPU activity is still device-wide: desktop applications can produce activity even when the benchmark itself does no GPU work.
+
+If `intel_gpu_top` reports `Permission denied` / `CAP_PERFMON`, an administrator must grant monitoring access. On systems supporting that capability, an administrator can grant it to the monitoring binary:
+
+```bash
+sudo setcap cap_perfmon=ep /usr/bin/intel_gpu_top
+```
+
+This grants performance-monitoring access to that executable; it does not require running the benchmark target as root. Package updates may remove the capability. cppbench does not change system permissions or invoke sudo. The same restrictions may affect perf, though user-space events often work with the existing configuration. See the [kernel perf security documentation](https://www.kernel.org/doc/html/latest/admin-guide/perf-security.html).
+
+If Valgrind cannot establish required loader redirections, it needs matching loader/library debug symbols. Preserve a working `DEBUGINFOD_URLS` configuration or install your distribution's matching debug symbols; the diagnostic timeout still applies. Invalid or incomplete tool output is reported as unavailable or failed, not as a clean result.
+
+Every requested diagnostic session creates a unique directory under `cppbench-artifacts/` (override with `--artifacts-dir`). It contains `diagnostics.json`, captured stdout/stderr, and applicable `perf.csv`, `gpu.json`, `valgrind.xml`, compressed heap trace, and `heaptrack-analysis.stdout`. Raw files are retained even for failures where available. Heaptrack uses a private `/tmp` staging directory to accommodate launcher path handling, then copies its trace into the artifact directory. Its launcher mixes messages with target stdout, so exact output comparison is skipped for that pass; the baseline, perf, GPU replay, and Valgrind still honor `--expect-output`.
+
+Text shows a concise diagnostic summary, with counter detail and more context in intermediate/advanced views. JSON embeds all parsed diagnostic results under `diagnostics.results` and GPU status under `gpu`. CSV remains a table of baseline measurements; the separate `diagnostics.json` contains tool results. Explicit `--metrics` filters baseline metrics, not separately requested tools. Diagnostic progress goes to stderr.
+
+Tool statuses include `ok`, `partial`, `unavailable`, `failed`, `findings`, `interrupted`, and `skipped`. Any requested tool that is not `ok` makes the overall exit code nonzero. At most 16 MiB of each textual tool report is parsed; larger files remain available as artifacts. Output limits bound captured stdout/stderr on a best-effort basis, not independently written profiles/XML files. Raw artifacts can be large. Baseline failures skip diagnostic replays entirely.
 
 ### Input and correctness
 
@@ -156,10 +220,23 @@ Groups:
 | `--cwd DIRECTORY` | Current directory | Target working directory |
 | `--env KEY=VALUE` | Inherited | Repeatable override for target and compiler |
 | `--units NUMBER` | `1` | Positive work units per invocation |
-| `--metrics LIST` | `all` | Comma-separated names/groups |
+| `--view LEVEL` | `simple` | `simple`, `intermediate`, or `advanced` text detail |
+| `--intermediate` | Off | Shortcut for `--view intermediate` |
+| `--advanced` | Off | Shortcut for `--view advanced` |
+| `--metrics LIST` | View-dependent text rows; all in exports | Explicit comma-separated names/groups override the view's rows |
 | `--format FORMAT` | `text` | `text`, `json`, or `csv` |
 | `--output FILE` | stdout | Report destination |
 | `--keep-going` | Off | Continue after failed measured runs |
+| `--perf` | Off | One extra replay with CPU hardware counters |
+| `--gpu` | Off | One extra replay with Intel device-wide GPU monitoring |
+| `--heaptrack` | Off | One extra replay with heap allocation profiling |
+| `--valgrind` | Off | One extra replay with Memcheck |
+| `--all-tools` | Off | Enable all four diagnostic passes |
+| `--diagnostic-timeout SECONDS` | `120` | Deadline for each diagnostic/analysis command |
+| `--artifacts-dir DIRECTORY` | `cppbench-artifacts` | Parent for unique retained diagnostic sessions |
+| `--perf-events LIST` | Six user-space hardware events | Comma-separated perf events |
+| `--gpu-interval-ms N` | `100` | GPU sampling interval, 10–60000 ms |
+| `--gpu-device SELECTOR` | Tool default | Intel GPU device selector |
 | `--list-metrics` | — | List metrics and exit |
 | `--version` | — | Show version |
 | `--help` | — | Show usage |
@@ -174,8 +251,8 @@ Statuses: `ok`, `timeout`, `output_limit`, `unexpected_exit`, `output_mismatch`,
 
 Exit codes:
 
-- `0`: every requested measurement passed, or an informational command succeeded.
-- `1`: a warmup or measurement failed; a report is produced.
+- `0`: every requested measurement and diagnostic passed, or an informational command succeeded.
+- `1`: a warmup/measurement failed, or a requested diagnostic was unavailable, partial, failed, or found memory errors; a report is produced.
 - `2`: invalid arguments, setup, compilation, or report-writing failure.
 - `130`: interrupted by SIGINT (Ctrl+C).
 - `143`: interrupted by SIGTERM.
@@ -194,7 +271,7 @@ Output is captured in temporary files, so printing can affect timing and filesys
 
 Programs execute with your permissions; this is **not a sandbox for untrusted code**. The target process group is killed on timeout, output-limit breach, interruption, and leader exit. Descendants that deliberately leave the group can escape cleanup. Programs must wait for their own children before returning. Interactive programs and persistent services are not suitable targets.
 
-Warmups may prime filesystem caches but do not transfer process-local state to later invocations. CPU scaling, thermals, caches, background tasks, and scheduling affect results. The tool does not flush caches, pin CPUs, or change power policies. Allocation counts, leaks, hardware cache misses, instructions, GPU usage, and energy are not measured by this version.
+Warmups may prime filesystem caches but do not transfer process-local state to later invocations. CPU scaling, thermals, caches, background tasks, and scheduling affect results. The tool does not flush caches, pin CPUs, or change power policies. Baseline metrics do not include allocations, leaks, hardware counters, or GPU activity; those require the optional diagnostic passes. Energy measurement is not implemented.
 
 ## Development
 
@@ -204,6 +281,6 @@ cargo fmt --check
 cargo clippy --locked --all-targets -- -D warnings
 ```
 
-`src/main.rs` implements CLI options, experiment coordination, statistics, and reports. `src/runner.rs` owns file/string lifetimes and the C FFI boundary. `native/measure.c` implements measurement; `native/measure.h` documents the ABI. `build.rs` compiles and links C. Integration tests exercise the actual CLI, including C++ compilation, target arguments, correctness checks, exports, failed-run exclusion, timeout cleanup, and interruption cleanup.
+`src/main.rs` implements CLI options, experiment coordination, and statistics. `src/report.rs` implements the three text views, unit formatting, and exports. `src/diagnostics.rs` orchestrates optional tools, retains artifacts, and parses their reports. `src/runner.rs` owns file/string lifetimes and the C FFI boundary. `native/measure.c` implements measurement; `native/measure.h` documents the ABI. `build.rs` compiles and links C. Tests cover report views, parsing, metric filtering, C++ compilation, target arguments, correctness checks, exports, failed-run exclusion, missing tools, GPU permission errors, instrumented-run isolation, timeout cleanup, and interruption cleanup. Tool-fixture tests run without special hardware or elevated permissions.
 
-JSON uses `schema_version: 2`. Compared with the Python version, it adds implementation and interruption fields, removes Python host metadata, and reports every statistical column in text. Metric names and successful-run aggregation remain consistent.
+JSON uses `schema_version: 2`, with additive `gpu` and `diagnostics` objects. Metric names and successful-run aggregation remain consistent. Complete statistical columns are available in advanced text view and JSON. Diagnostic measurements are nested separately and never enter baseline aggregates.

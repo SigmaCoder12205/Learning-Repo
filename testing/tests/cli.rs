@@ -20,22 +20,25 @@ fn successful(output: &Output) {
     assert!(output.status.success(), "{output:?}");
 }
 #[test]
-fn positional_path_defaults_to_all_metrics_and_statistics() {
+fn positional_path_defaults_to_overview_and_exports_all_metrics() {
     let output = bench(&["/bin/true"]);
     successful(&output);
     let text = String::from_utf8(output.stdout).unwrap();
     for word in [
         "10/10",
-        "wall (s)",
-        "rss (KiB)",
-        "throughput (units/s)",
-        "Stddev",
-        "P90",
-        "P95",
-        "CV %",
+        "Overview",
+        "Time",
+        "Peak memory",
+        "CPU usage",
+        "GPU usage",
+        "Not collected; pass --gpu",
+        "Throughput",
+        "Time variation",
     ] {
         assert!(text.contains(word), "missing {word}: {text}");
     }
+    assert!(!text.contains("Stddev"));
+    assert!(!text.contains("minor_faults"));
     let output = bench(&["/bin/true", "--format", "json"]);
     successful(&output);
     let r = report(&output);
@@ -43,6 +46,73 @@ fn positional_path_defaults_to_all_metrics_and_statistics() {
     assert_eq!(r["runs"].as_array().unwrap().len(), 10);
     assert_eq!(r["warmups"].as_array().unwrap().len(), 1);
     assert_eq!(r["summary"]["wall"]["count"], 10);
+    assert_eq!(r["gpu"]["status"], "unavailable");
+    assert!(r["gpu"]["usage_percent"].is_null());
+}
+
+#[test]
+fn report_levels_and_metric_overrides() {
+    for flag in ["--intermediate", "--view=intermediate"] {
+        let output = bench(&["/bin/true", flag, "--runs", "2"]);
+        successful(&output);
+        let text = String::from_utf8(output.stdout).unwrap();
+        for word in ["Resource summary", "User CPU time", "Lowest", "Highest"] {
+            assert!(text.contains(word), "{text}");
+        }
+        assert!(!text.contains("Stddev"));
+    }
+    for flag in ["--advanced", "--view=advanced"] {
+        let output = bench(&["/bin/true", flag, "--runs", "2"]);
+        successful(&output);
+        let text = String::from_utf8(output.stdout).unwrap();
+        for word in [
+            "Stddev",
+            "P90",
+            "P95",
+            "minor_faults",
+            "Settings:",
+            "Individual runs",
+            "#2 ok",
+        ] {
+            assert!(text.contains(word), "{text}");
+        }
+    }
+    for flag in ["--view=simple", "--intermediate", "--advanced"] {
+        let output = bench(&["/bin/true", flag, "--metrics", "wall", "--runs", "1"]);
+        successful(&output);
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(!text.contains("Peak memory"));
+        assert!(!text.contains("GPU usage"));
+        assert!(!text.contains("rss="));
+        let output = bench(&["/bin/true", flag, "--format", "json", "--runs", "1"]);
+        successful(&output);
+        assert_eq!(report(&output)["summary"].as_object().unwrap().len(), 15);
+    }
+    assert_eq!(
+        bench(&["/bin/true", "--intermediate", "--advanced"])
+            .status
+            .code(),
+        Some(2)
+    );
+    assert_eq!(
+        bench(&["/bin/true", "--view", "simple", "--advanced"])
+            .status
+            .code(),
+        Some(2)
+    );
+}
+
+#[test]
+fn overview_does_not_invent_successful_measurements() {
+    let output = bench(&["/bin/false"]);
+    assert_eq!(output.status.code(), Some(1));
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("No successful measurements"));
+    assert!(text.contains("unexpected_exit"));
+    assert!(!text.contains("average per run"));
+    let output = bench(&["/bin/true", "--runs", "1"]);
+    successful(&output);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("only one successful run"));
 }
 #[test]
 fn arguments_environment_cwd_and_filtering() {

@@ -1,10 +1,12 @@
+mod diagnostics;
+mod report;
 mod runner;
 use clap::Parser;
+use report::View;
 use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fmt::Write as _,
     io::Write as _,
     path::{Path, PathBuf},
 };
@@ -106,8 +108,17 @@ struct Cli {
     #[arg(long, default_value = "1", value_parser = positive)]
     units: f64,
     /// Comma-separated metric names or groups
-    #[arg(long, default_value = "all")]
-    metrics: String,
+    #[arg(long)]
+    metrics: Option<String>,
+    /// Text report detail (exports retain all selected data)
+    #[arg(long, value_enum, default_value = "simple")]
+    view: View,
+    /// Show resource ranges and CPU breakdown
+    #[arg(long, conflicts_with_all = ["advanced", "view"])]
+    intermediate: bool,
+    /// Show all statistics, configuration, and individual runs
+    #[arg(long, conflicts_with_all = ["intermediate", "view"])]
+    advanced: bool,
     #[arg(long)]
     list_metrics: bool,
     #[arg(long, default_value = "text", value_parser = ["text", "json", "csv"])]
@@ -116,6 +127,39 @@ struct Cli {
     output: Option<PathBuf>,
     #[arg(long)]
     keep_going: bool,
+    /// Extra replay with CPU hardware counters (user-space events)
+    #[arg(long)]
+    perf: bool,
+    /// Extra replay monitored by intel_gpu_top (device-wide activity)
+    #[arg(long)]
+    gpu: bool,
+    /// Extra replay with heap allocation profiling
+    #[arg(long)]
+    heaptrack: bool,
+    /// Extra replay with Valgrind Memcheck
+    #[arg(long)]
+    valgrind: bool,
+    /// Run all four optional diagnostic passes after the baseline
+    #[arg(long)]
+    all_tools: bool,
+    /// Seconds allowed per diagnostic or analysis command
+    #[arg(long, default_value = "120", value_parser = positive)]
+    diagnostic_timeout: f64,
+    /// Parent directory for retained diagnostic artifacts
+    #[arg(long, default_value = "cppbench-artifacts")]
+    artifacts_dir: PathBuf,
+    /// Comma-separated perf stat events
+    #[arg(
+        long,
+        default_value = "cycles:u,instructions:u,cache-references:u,cache-misses:u,branches:u,branch-misses:u"
+    )]
+    perf_events: String,
+    /// Intel GPU sampling interval in milliseconds
+    #[arg(long, default_value = "100", value_parser = clap::value_parser!(u32).range(10..=60000))]
+    gpu_interval_ms: u32,
+    /// intel_gpu_top device selector, e.g. drm:/dev/dri/card1
+    #[arg(long)]
+    gpu_device: Option<String>,
     /// Arguments passed verbatim to the target after --
     #[arg(last = true)]
     args: Vec<OsString>,
@@ -326,9 +370,26 @@ fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
             "Fewer than five successful measurements; distribution statistics have limited value.",
         );
     }
+    let diagnostics = diagnostics::execute(
+        args,
+        &command,
+        &options,
+        cancelled == 0 && good.len() == args.runs as usize,
+    )?;
+    if let Some(signal) = diagnostics["interrupt_signal"].as_i64().filter(|s| *s != 0) {
+        cancelled = signal;
+    }
+    let gpu = diagnostics["results"]["gpu"]
+        .as_object()
+        .map(|_| diagnostics["results"]["gpu"].clone())
+        .unwrap_or_else(|| {
+            json!({"status": "unavailable", "usage_percent": null,
+            "reason": "Not collected; pass --gpu to monitor Intel GPU activity"})
+        });
     Ok(Outcome::Report(
         json!({"schema_version": 2, "tool_version": env!("CARGO_PKG_VERSION"),
         "implementation": "Rust CLI with C process measurement", "command": display_command(&command),
+        "gpu": gpu, "diagnostics": diagnostics,
         "host": {"system": std::env::consts::OS, "machine": std::env::consts::ARCH,
             "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).ok()},
         "settings": {"runs": args.runs, "warmup": args.warmup, "timeout_seconds": args.timeout,
@@ -347,91 +408,6 @@ fn display_command(command: &[OsString]) -> Vec<String> {
         .map(|a| a.to_string_lossy().into_owned())
         .collect()
 }
-fn render(report: &Value, format: &str, selected: &[usize]) -> String {
-    if format == "json" {
-        return serde_json::to_string_pretty(report).unwrap() + "\n";
-    }
-    let runs = report["runs"].as_array().unwrap();
-    let mut out = String::new();
-    if format == "csv" {
-        out.push_str("run,status,exit_code");
-        for &i in selected {
-            let _ = write!(out, ",{} [{}]", METRICS[i].0, METRICS[i].1);
-        }
-        out.push('\n');
-        for row in runs {
-            let _ = write!(
-                out,
-                "{},{},{}",
-                row["run"],
-                row["status"].as_str().unwrap(),
-                row["exit_code"]
-            );
-            for &i in selected {
-                let _ = write!(out, ",{}", row["metrics"][METRICS[i].0]);
-            }
-            out.push('\n');
-        }
-        return out;
-    }
-    let _ = writeln!(
-        out,
-        "cppbench {} | {}/{} measured runs passed ({} requested)",
-        env!("CARGO_PKG_VERSION"),
-        report["successful_runs"],
-        runs.len(),
-        report["settings"]["runs"]
-    );
-    let _ = writeln!(
-        out,
-        "Command: {}\nHost: {} {} | logical CPUs available: {}\nWarmups: {}",
-        report["command"],
-        report["host"]["system"],
-        report["host"]["machine"],
-        report["host"]["logical_cpus"],
-        report["warmups"].as_array().unwrap().len()
-    );
-    if let Some(wall) = report["compilation"]["wall_seconds"].as_f64() {
-        let _ = writeln!(out, "Compilation: {wall:.6} s (excluded from runs)");
-    }
-    let _ = writeln!(
-        out,
-        "{:<32} {:>6} {:>13} {:>13} {:>13} {:>13} {:>13} {:>13} {:>13} {:>9}",
-        "Metric (unit)", "N", "Mean", "Median", "Min", "Max", "Stddev", "P90", "P95", "CV %"
-    );
-    for &i in selected {
-        let (name, unit, _) = METRICS[i];
-        let stats = &report["summary"][name];
-        if stats.is_null() {
-            continue;
-        }
-        let _ = write!(
-            out,
-            "{:<32} {:>6}",
-            format!("{name} ({unit})"),
-            stats["count"]
-        );
-        for key in ["mean", "median", "min", "max", "stdev", "p90", "p95"] {
-            let _ = write!(out, " {:>13.6}", stats[key].as_f64().unwrap());
-        }
-        let _ = writeln!(out, " {:>9.3}", stats["cv_percent"].as_f64().unwrap());
-    }
-    for phase in ["warmups", "runs"] {
-        for row in report[phase].as_array().unwrap() {
-            if row["status"] != "ok" {
-                let _ = writeln!(
-                    out,
-                    "{} #{}: {} (exit {})\nstderr (escaped): {}",
-                    phase, row["run"], row["status"], row["exit_code"], row["stderr_preview"]
-                );
-            }
-        }
-    }
-    for warning in report["warnings"].as_array().unwrap() {
-        let _ = writeln!(out, "Note: {}", warning.as_str().unwrap());
-    }
-    out
-}
 fn app() -> Result<i32, String> {
     let args = Cli::parse();
     if args.list_metrics {
@@ -441,7 +417,7 @@ fn app() -> Result<i32, String> {
         println!("Groups: timing, memory, io, scheduling, all");
         return Ok(0);
     }
-    let selected = select_metrics(&args.metrics)?;
+    let selected = select_metrics(args.metrics.as_deref().unwrap_or("all"))?;
     let report = match execute(&args, &selected)? {
         Outcome::Report(report) => report,
         Outcome::Interrupted(signal) => {
@@ -449,7 +425,20 @@ fn app() -> Result<i32, String> {
             return Ok(128 + signal);
         }
     };
-    let output = render(&report, &args.format, &selected);
+    let view = if args.advanced {
+        View::Advanced
+    } else if args.intermediate {
+        View::Intermediate
+    } else {
+        args.view
+    };
+    let output = report::render(
+        &report,
+        &args.format,
+        &selected,
+        view,
+        args.metrics.is_some(),
+    );
     if let Some(path) = &args.output {
         std::fs::write(path, output).map_err(|e| e.to_string())?;
     } else {
@@ -462,11 +451,13 @@ fn app() -> Result<i32, String> {
     if interrupted != 0 {
         return Ok(128 + interrupted as i32);
     }
-    Ok(if report["successful_runs"] == args.runs {
-        0
-    } else {
-        1
-    })
+    Ok(
+        if report["successful_runs"] == args.runs && report["diagnostics"]["failed"] != true {
+            0
+        } else {
+            1
+        },
+    )
 }
 fn main() {
     let code = match app() {

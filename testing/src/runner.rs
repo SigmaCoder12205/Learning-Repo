@@ -76,6 +76,16 @@ pub fn run(
     opts: &RunOptions<'_>,
     selected: &[usize],
 ) -> Result<Value, String> {
+    run_logged(command, opts, selected, None)
+}
+
+/// Optional persistent stdout/stderr captures for diagnostic tools.
+pub fn run_logged(
+    command: &[OsString],
+    opts: &RunOptions<'_>,
+    selected: &[usize],
+    logs: Option<(&Path, &Path)>,
+) -> Result<Value, String> {
     let work = || -> Result<Value, Box<dyn std::error::Error>> {
         let argv = command
             .iter()
@@ -97,8 +107,18 @@ pub fn run(
         env_ptrs.push(std::ptr::null());
         let cwd = cstring(opts.cwd.as_os_str())?;
         let input = File::open(opts.input.unwrap_or(Path::new("/dev/null")))?;
-        let mut output = tempfile::tempfile()?;
-        let mut error = tempfile::tempfile()?;
+        let capture = |path: &Path| {
+            File::options()
+                .read(true)
+                .write(true)
+                .create_new(true)
+                .open(path)
+        };
+        let (mut output, mut error) = if let Some((stdout, stderr)) = logs {
+            (capture(stdout)?, capture(stderr)?)
+        } else {
+            (tempfile::tempfile()?, tempfile::tempfile()?)
+        };
         let mut measured = Measurement::default();
         // SAFETY: all C strings, NULL-terminated pointer arrays, file descriptors, and
         // result storage live until the synchronous C call returns. This CLI invokes
