@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sched.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
@@ -38,8 +39,18 @@ static void child_failure(int fd) {
 int cppbench_measure(const char *executable, char *const argv[], char *const envp[],
                      const char *cwd, int input, int output, int error,
                      double timeout, double output_limit, double units,
+                     const unsigned *cpus, size_t cpu_count,
                      struct measurement *result) {
     memset(result, 0, sizeof *result);
+    cpu_set_t affinity, allowed;
+    CPU_ZERO(&affinity);
+    if (cpu_count) {
+        if (sched_getaffinity(0, sizeof allowed, &allowed) < 0) return errno;
+        for (size_t i = 0; i < cpu_count; ++i) {
+            if (cpus[i] >= CPU_SETSIZE || !CPU_ISSET(cpus[i], &allowed)) return EINVAL;
+            CPU_SET(cpus[i], &affinity);
+        }
+    }
     int launch[2];
     if (pipe2(launch, O_CLOEXEC) < 0) return errno;
     sigset_t children, oldmask;
@@ -75,6 +86,7 @@ int cppbench_measure(const char *executable, char *const argv[], char *const env
         sigemptyset(&default_pipe.sa_mask);
         sigaction(SIGPIPE, &default_pipe, NULL);
         sigprocmask(SIG_SETMASK, &oldmask, NULL);
+        if (cpu_count && sched_setaffinity(0, sizeof affinity, &affinity) < 0) child_failure(launch[1]);
         if (setsid() < 0 || chdir(cwd) < 0 ||
             dup2(input, STDIN_FILENO) < 0 || dup2(output, STDOUT_FILENO) < 0 ||
             dup2(error, STDERR_FILENO) < 0) child_failure(launch[1]);

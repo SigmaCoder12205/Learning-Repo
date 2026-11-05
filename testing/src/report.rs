@@ -115,6 +115,9 @@ pub fn render(
         report["settings"]["runs"]
     );
     let _ = writeln!(out, "Target: {}", report["command"][0]);
+    if report["completed"] == false {
+        out.push_str("Partial experiment: only completed invocations are included.\n");
+    }
     let good = report["successful_runs"].as_u64().unwrap_or(0);
     if good == 0 {
         out.push_str("No successful measurements. Resource summaries are unavailable.\n");
@@ -159,6 +162,23 @@ pub fn render(
         out.push_str("Memory values are per-run peaks. CPU 100% = one core; filesystem I/O is counted in operations.\n");
     }
     if !custom_metrics {
+        if let Some(engines) = report["gpu"]["target"]["engines_percent"]
+            .as_object()
+            .filter(|e| !e.is_empty())
+        {
+            let values: Vec<_> = engines
+                .iter()
+                .map(|(name, stats)| {
+                    format!("{name}: {:.1}%", stats["mean"].as_f64().unwrap_or(0.))
+                })
+                .collect();
+            let _ = writeln!(
+                out,
+                "  Target GPU         {} (PID {}; sampled)",
+                values.join(", "),
+                report["gpu"]["target"]["pid"]
+            );
+        }
         if let Some(engines) = report["gpu"]["engines_percent"].as_object() {
             out.push_str("  GPU engines        ");
             let values: Vec<_> = engines
@@ -193,11 +213,31 @@ pub fn render(
     if let Some(wall) = report["compilation"]["wall_seconds"].as_f64() {
         let _ = writeln!(out, "Compilation: {} (excluded from runs)", duration(wall));
     }
+    if view != View::Simple && visible.contains(&0) {
+        if let (Some(low), Some(high)) = (
+            report["summary"]["wall"]["mean_ci95"]["low"].as_f64(),
+            report["summary"]["wall"]["mean_ci95"]["high"].as_f64(),
+        ) {
+            let _ = writeln!(
+                out,
+                "Mean time bootstrap interval (95%, descriptive): {} to {}; outliers retained: {}",
+                duration(low),
+                duration(high),
+                report["summary"]["wall"]["outlier_count"]
+            );
+        }
+        if let Some(reason) = report["stop_reason"].as_str() {
+            let _ = writeln!(out, "Stopping reason: {reason}");
+        }
+    }
     if view == View::Advanced {
         let _ = writeln!(out, "\nCommand: {}\nHost: {} {} | logical CPUs available: {}\nSettings: {}\nCompleted warmups: {}",
             report["command"], report["host"]["system"], report["host"]["machine"], report["host"]["logical_cpus"],
             report["settings"], report["warmups"].as_array().unwrap().len());
         out.push_str("\nStatistics (successful measured runs; original metric units)\n");
+        if report["provenance"].is_object() {
+            let _ = writeln!(out, "Provenance: {}", report["provenance"]);
+        }
         let _ = writeln!(
             out,
             "{:<32} {:>6} {:>13} {:>13} {:>13} {:>13} {:>13} {:>13} {:>13} {:>9}",
@@ -259,6 +299,41 @@ pub fn render(
         let _ = writeln!(out, "Note: {}", warning.as_str().unwrap());
     }
     render_diagnostics(&mut out, report, view);
+    if report["comparison"].is_object() {
+        let _ = writeln!(
+            out,
+            "\nBaseline comparison: {}",
+            report["comparison"]["status"].as_str().unwrap_or("unknown")
+        );
+        if let Some(changes) = report["comparison"]["changes"].as_array() {
+            for change in changes {
+                let percent = change["change_percent"]
+                    .as_f64()
+                    .map(|n| format!("{n:+.2}%"))
+                    .unwrap_or_else(|| "undefined (zero baseline)".into());
+                let _ = writeln!(
+                    out,
+                    "  {}: {} -> {} ({percent}); {}{}",
+                    change["metric"].as_str().unwrap_or(""),
+                    change["baseline"],
+                    change["current"],
+                    change["statistic"].as_str().unwrap_or(""),
+                    if change["regression"] == true {
+                        "; REGRESSION"
+                    } else {
+                        ""
+                    }
+                );
+            }
+        }
+        for key in ["differences", "warnings"] {
+            if let Some(messages) = report["comparison"][key].as_array() {
+                for message in messages {
+                    let _ = writeln!(out, "  Note: {}", message);
+                }
+            }
+        }
+    }
     if view == View::Simple {
         out.push_str("More detail: --intermediate (resource ranges) or --advanced (full statistics and runs).\n");
     }
@@ -283,6 +358,28 @@ fn render_diagnostics(out: &mut String, report: &Value, view: View) {
             let _ = writeln!(out, "    {reason:?}");
         }
         match name.as_str() {
+            "hotspots" => {
+                if let Some(functions) = result["functions"].as_array() {
+                    for function in functions
+                        .iter()
+                        .take(if view == View::Simple { 3 } else { 10 })
+                    {
+                        let _ = writeln!(
+                            out,
+                            "    {:.1}% self samples: {}{}",
+                            function["self_percent"].as_f64().unwrap_or(0.),
+                            function["function"].as_str().unwrap_or(""),
+                            function["source"]
+                                .as_str()
+                                .map(|s| format!(" — {s}"))
+                                .unwrap_or_default()
+                        );
+                    }
+                }
+                if let Some(path) = result["flamegraph_file"].as_str() {
+                    let _ = writeln!(out, "    Flamegraph: {path:?}");
+                }
+            }
             "perf" => {
                 for (key, label, unit) in [
                     ("instructions_per_cycle", "Instructions/cycle", ""),
@@ -348,6 +445,17 @@ fn render_diagnostics(out: &mut String, report: &Value, view: View) {
                 }
             }
             "gpu" => {
+                if let Some(target) = result["target"].as_object() {
+                    if let Some(reason) = target.get("reason").and_then(Value::as_str) {
+                        let _ = writeln!(out, "    Target attribution: {reason}");
+                    }
+                    if let Some(bytes_value) = target
+                        .get("peak_drm_resident_bytes")
+                        .and_then(Value::as_f64)
+                    {
+                        let _=writeln!(out,"    Target DRM resident memory peak: {} (may include shared buffers; not dedicated VRAM)",bytes(bytes_value));
+                    }
+                }
                 if let Some(engines) = result["engines_percent"].as_object() {
                     for (name, stats) in engines {
                         let _ = writeln!(

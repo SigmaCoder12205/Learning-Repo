@@ -15,7 +15,7 @@ use std::{
 
 const PARSE_LIMIT: u64 = 16 * 1024 * 1024;
 
-fn read_report(path: &Path) -> Result<String, String> {
+pub(crate) fn read_report(path: &Path) -> Result<String, String> {
     let file = File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if file.metadata().map_err(|e| e.to_string())?.len() > PARSE_LIMIT {
         return Err(format!(
@@ -32,7 +32,10 @@ fn read_report(path: &Path) -> Result<String, String> {
     }
     Ok(text)
 }
-fn find_tool(name: &str, env: &BTreeMap<OsString, OsString>) -> Result<OsString, String> {
+pub(crate) fn find_tool(
+    name: &str,
+    env: &BTreeMap<OsString, OsString>,
+) -> Result<OsString, String> {
     if let Some(path) = env.get(OsStr::new("PATH")) {
         for dir in std::env::split_paths(path) {
             let candidate = dir.join(name);
@@ -51,7 +54,7 @@ fn find_tool(name: &str, env: &BTreeMap<OsString, OsString>) -> Result<OsString,
 fn issue(status: &str, reason: impl AsRef<str>) -> Value {
     json!({"status": status, "reason": reason.as_ref()})
 }
-fn command_run(
+pub(crate) fn command_run(
     command: &[OsString],
     opts: &RunOptions<'_>,
     dir: &Path,
@@ -65,7 +68,7 @@ fn command_run(
     row["stderr_file"] = json!(stderr);
     Ok(row)
 }
-fn invocation_failed(row: &Value) -> Option<Value> {
+pub(crate) fn invocation_failed(row: &Value) -> Option<Value> {
     if row["status"] == "ok" {
         return None;
     }
@@ -98,6 +101,7 @@ pub fn execute(
         ("gpu", args.gpu),
         ("heaptrack", args.heaptrack),
         ("valgrind", args.valgrind),
+        ("hotspots", args.hotspots),
     ]
     .into_iter()
     .filter(|(_, enabled)| *enabled || args.all_tools)
@@ -141,6 +145,7 @@ pub fn execute(
         timeout: args.diagnostic_timeout,
         output_limit: base.output_limit,
         units: base.units,
+        affinity: base.affinity,
     };
     let mut signal = 0;
     for name in &requested {
@@ -154,6 +159,7 @@ pub fn execute(
             "gpu" => run_gpu(args, target, &opts, &dir),
             "heaptrack" => run_heaptrack(target, &opts, &dir),
             "valgrind" => run_valgrind(target, &opts, &dir),
+            "hotspots" => crate::hotspots::run(target, &opts, &dir),
             _ => unreachable!(),
         };
         let value = result.unwrap_or_else(|e| issue("unavailable", e));
@@ -497,7 +503,10 @@ if ! kill -0 "$monitor_pid" 2>/dev/null; then
     printf '%s\n' "$?" > "$errors.exit"
     exit 125
 fi
-"$@"
+"$@" <&0 &
+target_pid=$!
+printf '%s\n' "$target_pid" > "$errors.target-pid"
+wait "$target_pid"
 result=$?
 kill -INT "$monitor_pid" 2>/dev/null
 wait "$monitor_pid"
@@ -557,6 +566,13 @@ fn run_gpu(
     let mut result = read_report(&raw)
         .and_then(|text| parse_gpu(&text))
         .unwrap_or_else(|reason| issue("unavailable", reason));
+    if let Ok(pid) = read_report(&dir.join("gpu-monitor.stderr.target-pid"))
+        .and_then(|s| s.trim().parse::<u32>().map_err(|e| e.to_string()))
+    {
+        result["target"] = read_report(&raw)
+            .and_then(|s| parse_gpu_target(&s, pid))
+            .unwrap_or_else(|reason| issue("unavailable", reason));
+    }
     result["invocation"] = row;
     result["raw_file"] = json!(raw);
     result["monitor_diagnostics"] = json!(diagnostic);
@@ -655,9 +671,168 @@ fn gpu_samples(text: &str) -> Result<Vec<Value>, String> {
     Ok(samples)
 }
 
+fn parse_gpu_target(text: &str, pid: u32) -> Result<Value, String> {
+    let samples = gpu_samples(text)?;
+    let mut engines = BTreeMap::<String, Vec<f64>>::new();
+    let mut resident = Vec::new();
+    let mut observed = 0;
+    let numeric = |v: &Value| {
+        v.as_f64()
+            .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+            .filter(|v| v.is_finite() && *v >= 0.)
+    };
+    for sample in samples.iter().skip(1) {
+        let Some(clients) = sample["clients"].as_object() else {
+            continue;
+        };
+        let mut totals = BTreeMap::<String, f64>::new();
+        let mut memory = 0.;
+        let mut memory_seen = false;
+        let mut matched = false;
+        for client in clients.values() {
+            let client_pid = client["pid"]
+                .as_u64()
+                .or_else(|| client["pid"].as_str().and_then(|s| s.parse().ok()));
+            if client_pid != Some(pid as u64) {
+                continue;
+            }
+            matched = true;
+            if let Some(classes) = client["engine-classes"].as_object() {
+                for (name, value) in classes {
+                    if let Some(value) = numeric(&value["busy"]) {
+                        *totals.entry(name.clone()).or_default() += value;
+                    }
+                }
+            }
+            if let Some(regions) = client["memory"].as_object() {
+                for region in regions.values() {
+                    if let Some(value) = numeric(&region["resident"]) {
+                        memory += value;
+                        memory_seen = true;
+                    }
+                }
+            }
+        }
+        if matched {
+            observed += 1;
+        }
+        if memory_seen {
+            resident.push(memory);
+        }
+        for (name, value) in totals {
+            engines.entry(name).or_default().push(value);
+        }
+    }
+    if observed == 0 {
+        return Ok(
+            json!({"status":"unavailable","pid":pid,"reason":"target DRM client not observed; it may do no GPU work, finish too quickly, or use a child process"}),
+        );
+    }
+    let summaries: BTreeMap<_, _> = engines
+        .into_iter()
+        .map(|(name, values)| (name, crate::summarize(values)))
+        .collect();
+    Ok(
+        json!({"status":if summaries.is_empty()&&resident.is_empty(){"unavailable"}else{"ok"},"pid":pid,"observed_samples":observed,
+        "engines_percent":summaries,"peak_drm_resident_bytes":resident.into_iter().reduce(f64::max),
+        "scope":"exact target PID only; child processes excluded; sums matching DRM clients and memory regions; shared buffers may be counted more than once; resident bytes are not dedicated VRAM"}),
+    )
+}
+
+pub fn check_tools() -> Result<Value, String> {
+    let mut env: BTreeMap<OsString, OsString> = std::env::vars_os().collect();
+    env.insert("LC_ALL".into(), "C".into());
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let opts = RunOptions {
+        cwd: &cwd,
+        env: &env,
+        input: None,
+        expected: None,
+        expected_exit: 0,
+        timeout: 10.,
+        output_limit: 4. * 1048576.,
+        units: 1.,
+        affinity: &[],
+    };
+    let mut tools = serde_json::Map::new();
+    let mut interrupted = 0;
+    for (name, flag) in [
+        ("perf", "--version"),
+        ("intel_gpu_top", "-h"),
+        ("heaptrack", "--version"),
+        ("heaptrack_print", "--version"),
+        ("valgrind", "--version"),
+    ] {
+        if interrupted != 0 {
+            break;
+        }
+        let path = match find_tool(name, &env) {
+            Ok(p) => p,
+            Err(e) => {
+                tools.insert(name.into(), issue("unavailable", e));
+                continue;
+            }
+        };
+        let row = command_run(&[path.clone(), flag.into()], &opts, dir.path(), name)?;
+        if row["status"] == "interrupted" {
+            interrupted = row["interrupt_signal"].as_i64().unwrap_or(2);
+        }
+        let stdout = read_report(&dir.path().join(format!("{name}.stdout"))).unwrap_or_default();
+        let preview = if stdout.trim().is_empty() {
+            row["stderr_preview"].as_str().unwrap_or("")
+        } else {
+            stdout.trim()
+        };
+        tools.insert(name.into(),json!({"status":if row["status"]=="ok"{"ok"}else{"unavailable"},"path":path,
+            "identity":preview.lines().filter(|l|!l.trim().is_empty()).take(3).collect::<Vec<_>>().join("\n"),
+            "sha256":crate::experiment::hash_file(Path::new(&path)).ok()}));
+    }
+    let mut probes = serde_json::Map::new();
+    if interrupted == 0 {
+        for (name, argv) in [
+            ("perf", vec!["stat", "-e", "cycles:u", "--", "/bin/true"]),
+            (
+                "intel_gpu_top",
+                vec!["-J", "-s", "10", "-n", "2", "-o", "-"],
+            ),
+        ] {
+            if let Ok(path) = find_tool(name, &env) {
+                let mut command = vec![path];
+                command.extend(argv.into_iter().map(OsString::from));
+                let row = command_run(&command, &opts, dir.path(), &format!("probe-{name}"))?;
+                probes.insert(
+                    name.into(),
+                    json!({"status":row["status"],"stderr":row["stderr_preview"]}),
+                );
+                if row["status"] == "interrupted" {
+                    interrupted = row["interrupt_signal"].as_i64().unwrap_or(2);
+                    break;
+                }
+            }
+        }
+    }
+    Ok(
+        json!({"kind":"tool_check","tools":tools,"counter_probes":probes,"interrupt_signal":interrupted,
+        "note":"checks tool identity and basic counter access; individual workloads and report formats can still expose compatibility limits"}),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gpu_client_attribution_excludes_other_pids_and_baseline() {
+        let text = include_str!("../tests/fixtures/intel_gpu_clients.json");
+        let target = parse_gpu_target(text, 42).unwrap();
+        assert_eq!(target["status"], "ok");
+        assert_eq!(target["observed_samples"], 1);
+        assert_eq!(target["engines_percent"]["Render/3D"]["mean"], 30.0);
+        assert_eq!(target["peak_drm_resident_bytes"], 3072.0);
+        let absent = parse_gpu_target(text, 100).unwrap();
+        assert_eq!(absent["status"], "unavailable");
+        assert!(absent["engines_percent"].is_null());
+    }
     #[test]
     fn perf_handles_missing_events_and_zero_denominators() {
         let r = parse_perf("100;;cycles:u;12;75.0;;\n200;;instructions:u;12;75.0;;\n<not supported>;;cache-misses:u;0;0;;\n").unwrap();

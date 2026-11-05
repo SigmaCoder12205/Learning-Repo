@@ -1,5 +1,6 @@
 #ifndef CPPBENCH_MEASURE_H
 #define CPPBENCH_MEASURE_H
+#include <stddef.h>
 
 /* Layout is mirrored by #[repr(C)] Measurement in src/runner.rs. */
 struct measurement {
@@ -16,5 +17,6 @@ struct measurement {
 int cppbench_measure(const char *executable, char *const argv[], char *const envp[],
                      const char *cwd, int input, int output, int error,
                      double timeout, double output_limit, double units,
+                     const unsigned *cpus, size_t cpu_count,
                      struct measurement *result);
 #endif

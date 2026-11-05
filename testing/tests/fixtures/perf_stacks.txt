@@ -1,0 +1,15 @@
+
+        5624048e00b4 main (/tmp/program)
+  workload.cpp:9
+        7f9cd5027780 [unknown] (/usr/lib/libc.so.6)
+  libc_start_call_main.h:59
+        5624048e0164 _start (/tmp/program)
+  ??:0
+
+        5624048e00b4 main (/tmp/program)
+  workload.cpp:9
+        7f9cd5027780 [unknown] (/usr/lib/libc.so.6)
+  libc_start_call_main.h:59
+        5624048e0164 _start (/tmp/program)
+  ??:0
+

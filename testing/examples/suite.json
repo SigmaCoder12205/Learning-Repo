@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "defaults": {
+    "executable": "../build/workload",
+    "runs": 10,
+    "warmup": 2,
+    "timeout": 120
+  },
+  "benchmarks": [
+    {"name": "small", "args": ["1000000"], "units": 1000000},
+    {"name": "large", "args": ["100000000"], "units": 100000000}
+  ]
+}

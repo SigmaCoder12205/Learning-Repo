@@ -33,6 +33,8 @@ extern "C" {
         timeout: f64,
         output_limit: f64,
         units: f64,
+        cpus: *const u32,
+        cpu_count: usize,
         result: *mut Measurement,
     ) -> c_int;
 }
@@ -46,6 +48,7 @@ pub struct RunOptions<'a> {
     pub timeout: f64,
     pub output_limit: f64,
     pub units: f64,
+    pub affinity: &'a [u32],
 }
 
 fn cstring(value: &OsStr) -> Result<CString, String> {
@@ -135,6 +138,8 @@ pub fn run_logged(
                 opts.timeout,
                 opts.output_limit,
                 opts.units,
+                opts.affinity.as_ptr(),
+                opts.affinity.len(),
                 &mut measured,
             )
         };

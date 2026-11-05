@@ -1,6 +1,11 @@
+mod comparison;
 mod diagnostics;
+mod experiment;
+mod hotspots;
+mod html;
 mod report;
 mod runner;
+mod suite;
 use clap::Parser;
 use report::View;
 use serde_json::{json, Value};
@@ -56,7 +61,7 @@ fn positive(s: &str) -> Result<f64, String> {
         Err("must be finite and greater than zero".into())
     }
 }
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(
     version,
     about = "Native Rust/C process benchmarks for Linux",
@@ -121,7 +126,7 @@ struct Cli {
     advanced: bool,
     #[arg(long)]
     list_metrics: bool,
-    #[arg(long, default_value = "text", value_parser = ["text", "json", "csv"])]
+    #[arg(long, default_value = "text", value_parser = ["text", "json", "csv", "html"])]
     format: String,
     #[arg(long)]
     output: Option<PathBuf>,
@@ -139,7 +144,7 @@ struct Cli {
     /// Extra replay with Valgrind Memcheck
     #[arg(long)]
     valgrind: bool,
-    /// Run all four optional diagnostic passes after the baseline
+    /// Run all five optional diagnostic passes after the baseline
     #[arg(long)]
     all_tools: bool,
     /// Seconds allowed per diagnostic or analysis command
@@ -160,6 +165,54 @@ struct Cli {
     /// intel_gpu_top device selector, e.g. drm:/dev/dri/card1
     #[arg(long)]
     gpu_device: Option<String>,
+    /// Run named benchmarks from a JSON suite
+    #[arg(long, conflicts_with_all = ["program", "executable", "source", "recover", "check_tools"])]
+    suite: Option<PathBuf>,
+    /// Name stored with this experiment
+    #[arg(long)]
+    name: Option<String>,
+    /// Save a successful experiment as a JSON comparison baseline
+    #[arg(long)]
+    save_baseline: Option<PathBuf>,
+    /// Compare against a saved JSON report
+    #[arg(long)]
+    compare: Option<PathBuf>,
+    /// Allowed worsening, e.g. --regression wall=5 --regression rss=10
+    #[arg(long, requires = "compare")]
+    regression: Vec<String>,
+    /// Compare despite different workloads/hosts (differences remain visible)
+    #[arg(long, requires = "compare")]
+    allow_mismatch: bool,
+    /// Extend measurements until the relative precision target is reached
+    #[arg(long)]
+    adaptive: bool,
+    /// Maximum measured invocations when extending the experiment
+    #[arg(long, default_value = "100", value_parser = clap::value_parser!(u32).range(1..))]
+    max_runs: u32,
+    /// Desired approximate 95% mean interval half-width as percent of mean
+    #[arg(long, default_value = "5", value_parser = positive)]
+    precision: f64,
+    /// Minimum total measured wall time in seconds (across invocations)
+    #[arg(long, value_parser = positive)]
+    min_time: Option<f64>,
+    /// Pin target processes to a CPU list, e.g. 0,2-3
+    #[arg(long)]
+    cpu_affinity: Option<String>,
+    /// Show run progress, elapsed time, and estimated remaining work on stderr
+    #[arg(long)]
+    progress: bool,
+    /// Append durable completed-run records to a new JSONL journal
+    #[arg(long, conflicts_with = "recover")]
+    checkpoint: Option<PathBuf>,
+    /// Recover a report from a JSONL journal without executing the target
+    #[arg(long, conflicts_with_all = ["program", "executable", "source", "suite", "check_tools"])]
+    recover: Option<PathBuf>,
+    /// Check installed optional tools and counter access without a target
+    #[arg(long, conflicts_with_all = ["program", "executable", "source", "suite", "recover"])]
+    check_tools: bool,
+    /// Extra CPU sampling pass with function hotspots and a flamegraph
+    #[arg(long)]
+    hotspots: bool,
     /// Arguments passed verbatim to the target after --
     #[arg(last = true)]
     args: Vec<OsString>,
@@ -192,7 +245,16 @@ fn percentile(values: &[f64], fraction: f64) -> f64 {
     let high = (low + 1).min(values.len() - 1);
     values[low] + (values[high] - values[low]) * (index - low as f64)
 }
-fn summarize(mut values: Vec<f64>) -> Value {
+fn summarize(values: Vec<f64>) -> Value {
+    let mut result = summarize_basic(values.clone());
+    let extra = experiment::intervals(&values);
+    result
+        .as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    result
+}
+fn summarize_basic(mut values: Vec<f64>) -> Value {
     values.sort_by(f64::total_cmp);
     let count = values.len();
     let mean = values.iter().sum::<f64>() / count as f64;
@@ -227,7 +289,12 @@ enum Outcome {
     Report(Value),
     Interrupted(i32),
 }
-fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
+fn execute(
+    args: &Cli,
+    selected: &[usize],
+    journal: &mut experiment::Journal,
+) -> Result<Outcome, String> {
+    experiment::validate(args)?;
     let cwd = resolve(&args.cwd)?;
     if !cwd.is_dir() {
         return Err("--cwd must be a directory".into());
@@ -252,6 +319,7 @@ fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
         env.insert(key.into(), value.into());
         env_keys.push(key);
     }
+    let affinity = experiment::affinity(args.cpu_affinity.as_deref())?;
     let build_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
     let mut compilation = Value::Null;
     let binary = if !args.source.is_empty() {
@@ -280,6 +348,7 @@ fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
                 timeout: args.compile_timeout,
                 output_limit: 16.0 * 1048576.0,
                 units: 1.0,
+                affinity: &[],
             },
             &[0],
         )?;
@@ -296,7 +365,7 @@ fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
                 row["stderr_preview"].as_str().unwrap_or("")
             ));
         }
-        compilation = json!({"command": display_command(&command), "wall_seconds": row["metrics"]["wall"], "diagnostics": row["stderr_preview"]});
+        compilation = json!({"command":display_command(&command),"wall_seconds":row["metrics"]["wall"],"diagnostics":row["stderr_preview"]});
         binary
     } else {
         resolve(
@@ -306,9 +375,17 @@ fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
                 .ok_or("provide an executable path: cppbench ./program (or use --source)")?,
         )?
     };
+    let provenance = experiment::provenance(&binary, input.as_deref(), &env)?;
+    let name = args.name.clone().unwrap_or_else(|| {
+        binary
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned()
+    });
     let mut command = vec![binary.into_os_string()];
     command.extend(args.args.clone());
-    let options = runner::RunOptions {
+    let opts = runner::RunOptions {
         cwd: &cwd,
         env: &env,
         input: input.as_deref(),
@@ -317,91 +394,149 @@ fn execute(args: &Cli, selected: &[usize]) -> Result<Outcome, String> {
         timeout: args.timeout,
         output_limit: args.output_limit * 1048576.0,
         units: args.units,
+        affinity: &affinity,
     };
-    let mut phases: [Vec<Value>; 2] = [Vec::new(), Vec::new()];
+    let mut report = json!({"schema_version":3,"tool_version":env!("CARGO_PKG_VERSION"),"name":name,
+        "implementation":"Rust CLI with C process measurement","command":display_command(&command),"provenance":provenance,
+        "host":{"system":std::env::consts::OS,"machine":std::env::consts::ARCH,"logical_cpus":std::thread::available_parallelism().map(|n|n.get()).ok()},
+        "settings":{"runs":args.runs,"warmup":args.warmup,"timeout_seconds":args.timeout,"cwd":cwd,"work_units":args.units,
+            "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":input,"expected_output":expected,
+            "environment_override_keys":env_keys,"cpu_affinity":affinity,"adaptive":args.adaptive,"max_runs":args.max_runs,
+            "precision_percent":args.precision,"min_time_seconds":args.min_time},
+        "compilation":compilation,"custom_metrics":args.metrics.is_some(),"selected_metrics":selected.iter().map(|&i|METRICS[i].0).collect::<Vec<_>>(),
+        "metric_units":selected.iter().map(|&i|(METRICS[i].0,METRICS[i].1)).collect::<BTreeMap<_,_>>(),
+        "warmups":[],"runs":[],"summary":{},"successful_runs":0,"warnings":[],"interrupt_signal":0,
+        "completed":false,"measurement_passed":false,
+        "diagnostics":{"results":{},"failed":false},
+        "gpu":{"status":"unavailable","usage_percent":null,"reason":"Not collected; pass --gpu to monitor Intel GPU activity"}});
+    journal.emit(json!({"event":"start","report":report}))?;
+    let mut collect = selected.to_vec();
+    if !collect.contains(&0) {
+        collect.push(0);
+    }
+    let extended = args.adaptive || args.min_time.is_some();
+    let limit = if extended { args.max_runs } else { args.runs };
+    let mut walls = Vec::new();
+    let started = std::time::Instant::now();
     let mut cancelled = 0;
-    for (phase, count) in [args.warmup, args.runs].into_iter().enumerate() {
+    let mut stop_reason = "fixed_runs";
+    for (phase, count) in [("warmups", args.warmup), ("runs", limit)] {
+        if args.progress {
+            eprintln!("cppbench [{name}]: starting {phase}, limit {count}");
+        }
         for index in 0..count {
-            let mut row = runner::run(&command, &options, selected)?;
+            let mut row = runner::run(&command, &opts, &collect)?;
+            let wall = row["metrics"]["wall"]
+                .as_f64()
+                .ok_or("invalid wall measurement")?;
+            row["elapsed_seconds"] = json!(wall);
             row["run"] = json!(index + 1);
+            if !selected.contains(&0) {
+                row["metrics"].as_object_mut().unwrap().remove("wall");
+            }
             let failed = row["status"] != "ok";
             if row["status"] == "interrupted" {
                 cancelled = row["interrupt_signal"].as_i64().unwrap_or(2);
             }
-            phases[phase].push(row);
-            if cancelled != 0 || (failed && (phase == 0 || !args.keep_going)) {
+            if phase == "runs" && !failed {
+                walls.push(wall);
+            }
+            journal.emit(json!({"event":"sample","name":name,"phase":phase,"row":row}))?;
+            report[phase].as_array_mut().unwrap().push(row);
+            if args.progress {
+                let eta = report[phase]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|r| r["elapsed_seconds"].as_f64())
+                    .sum::<f64>()
+                    / (index + 1) as f64
+                    * (count - index - 1) as f64;
+                eprintln!(
+                    "cppbench [{name}]: {phase} {}/{}; elapsed {:.1}s; ETA to run limit {:.1}s",
+                    index + 1,
+                    count,
+                    started.elapsed().as_secs_f64(),
+                    eta
+                );
+            }
+            if cancelled != 0 || (failed && (phase == "warmups" || !args.keep_going)) {
+                stop_reason = if cancelled != 0 {
+                    "interrupted"
+                } else {
+                    "failure"
+                };
                 break;
             }
+            if phase == "runs" && extended && index + 1 >= args.runs {
+                let time_ok = walls.iter().sum::<f64>() >= args.min_time.unwrap_or(0.);
+                let precision_ok =
+                    !args.adaptive || experiment::precision_met(&walls, args.precision);
+                if time_ok && precision_ok {
+                    stop_reason = "targets_reached";
+                    break;
+                }
+                stop_reason = "run_limit_reached";
+            }
         }
-        if cancelled != 0 || (phase == 0 && phases[0].iter().any(|r| r["status"] != "ok")) {
+        if cancelled != 0
+            || (phase == "warmups"
+                && report[phase]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|r| r["status"] != "ok"))
+        {
             break;
         }
     }
-    let good: Vec<_> = phases[1].iter().filter(|r| r["status"] == "ok").collect();
-    let mut summary = serde_json::Map::new();
-    if !good.is_empty() {
-        for &i in selected {
-            let name = METRICS[i].0;
-            summary.insert(
-                name.into(),
-                summarize(
-                    good.iter()
-                        .map(|r| r["metrics"][name].as_f64().unwrap())
-                        .collect(),
-                ),
-            );
-        }
+    experiment::refresh(&mut report);
+    let failed = ["warmups", "runs"].iter().any(|phase| {
+        report[*phase]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["status"] != "ok")
+    });
+    let passed = cancelled == 0 && !failed && walls.len() >= args.runs as usize;
+    let warnings = report["warnings"].as_array_mut().unwrap();
+    if failed {
+        warnings.push(json!(
+            "Failures are excluded from summary statistics; inspect individual run statuses."
+        ));
     }
-    let mut warnings = Vec::new();
-    if phases.iter().flatten().any(|r| r["status"] != "ok") {
-        warnings.push(
-            "Failures are excluded from summary statistics; inspect individual run statuses.",
-        );
+    if walls.len() < 5 {
+        warnings.push(json!(
+            "Fewer than five successful measurements; distribution statistics have limited value."
+        ));
     }
-    if summary
-        .get("wall")
-        .and_then(|s| s["median"].as_f64())
-        .is_some_and(|n| n < 0.01)
+    if selected.contains(&0)
+        && !walls.is_empty()
+        && summarize_basic(walls.clone())["median"].as_f64().unwrap() < 0.01
     {
-        warnings.push("Runs under 10 ms are sensitive to launch and scheduling overhead; increase work per invocation.");
+        warnings.push(json!("Runs under 10 ms are sensitive to launch and scheduling overhead; increase work per invocation."));
     }
-    if good.len() < 5 {
-        warnings.push(
-            "Fewer than five successful measurements; distribution statistics have limited value.",
-        );
+    if stop_reason == "run_limit_reached" {
+        warnings.push(json!("Run limit reached before the requested precision or total measurement duration; measurements are retained."));
     }
-    let diagnostics = diagnostics::execute(
-        args,
-        &command,
-        &options,
-        cancelled == 0 && good.len() == args.runs as usize,
-    )?;
+    report["stop_reason"] = json!(stop_reason);
+    report["measurement_passed"] = json!(passed);
+    report["interrupt_signal"] = json!(cancelled);
+    journal.emit(json!({"event":"report","report":report}))?; // Preserve baseline before expensive diagnostics.
+    let diagnostics = diagnostics::execute(args, &command, &opts, passed)?;
     if let Some(signal) = diagnostics["interrupt_signal"].as_i64().filter(|s| *s != 0) {
         cancelled = signal;
     }
-    let gpu = diagnostics["results"]["gpu"]
-        .as_object()
-        .map(|_| diagnostics["results"]["gpu"].clone())
-        .unwrap_or_else(|| {
-            json!({"status": "unavailable", "usage_percent": null,
-            "reason": "Not collected; pass --gpu to monitor Intel GPU activity"})
-        });
-    Ok(Outcome::Report(
-        json!({"schema_version": 2, "tool_version": env!("CARGO_PKG_VERSION"),
-        "implementation": "Rust CLI with C process measurement", "command": display_command(&command),
-        "gpu": gpu, "diagnostics": diagnostics,
-        "host": {"system": std::env::consts::OS, "machine": std::env::consts::ARCH,
-            "logical_cpus": std::thread::available_parallelism().map(|n| n.get()).ok()},
-        "settings": {"runs": args.runs, "warmup": args.warmup, "timeout_seconds": args.timeout,
-            "cwd": cwd, "work_units": args.units, "output_limit_mib": args.output_limit,
-            "expected_exit": args.expect_exit, "input": input, "expected_output": expected,
-            "environment_override_keys": env_keys},
-        "compilation": compilation, "selected_metrics": selected.iter().map(|&i| METRICS[i].0).collect::<Vec<_>>(),
-        "metric_units": selected.iter().map(|&i| (METRICS[i].0, METRICS[i].1)).collect::<BTreeMap<_,_>>(),
-        "warmups": phases[0], "runs": phases[1], "summary": summary,
-        "successful_runs": good.len(), "warnings": warnings, "interrupt_signal": cancelled}),
-    ))
+    if diagnostics["results"]["gpu"].is_object() {
+        report["gpu"] = diagnostics["results"]["gpu"].clone();
+    }
+    report["diagnostics"] = diagnostics;
+    report["interrupt_signal"] = json!(cancelled);
+    report["completed"] = json!(cancelled == 0);
+    journal.emit(json!({"event":"report","report":report}))?;
+    Ok(Outcome::Report(report))
 }
+
 fn display_command(command: &[OsString]) -> Vec<String> {
     command
         .iter()
@@ -409,7 +544,10 @@ fn display_command(command: &[OsString]) -> Vec<String> {
         .collect()
 }
 fn app() -> Result<i32, String> {
-    let args = Cli::parse();
+    use clap::{CommandFactory, FromArgMatches};
+    let command = Cli::command();
+    let matches = command.clone().get_matches();
+    let args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
     if args.list_metrics {
         for (name, unit, description) in METRICS {
             println!("{name:24} {unit:10} {description}");
@@ -417,14 +555,107 @@ fn app() -> Result<i32, String> {
         println!("Groups: timing, memory, io, scheduling, all");
         return Ok(0);
     }
-    let selected = select_metrics(args.metrics.as_deref().unwrap_or("all"))?;
-    let report = match execute(&args, &selected)? {
-        Outcome::Report(report) => report,
-        Outcome::Interrupted(signal) => {
-            eprintln!("cppbench: compilation interrupted");
-            return Ok(128 + signal);
+    if args.suite.is_some() {
+        let allowed = [
+            "suite",
+            "format",
+            "output",
+            "progress",
+            "checkpoint",
+            "compare",
+            "regression",
+            "allow_mismatch",
+            "save_baseline",
+            "advanced",
+            "intermediate",
+            "view",
+            "help",
+            "version",
+        ];
+        for id in matches
+            .ids()
+            .filter(|id| command.get_arguments().any(|arg| arg.get_id() == *id))
+        {
+            if matches.value_source(id.as_str()) == Some(clap::parser::ValueSource::CommandLine)
+                && !allowed.contains(&id.as_str())
+            {
+                return Err(format!(
+                    "put --{} inside the suite's defaults or benchmark entry",
+                    id.as_str().replace('_', "-")
+                ));
+            }
         }
+    }
+    if args.recover.is_some() || args.check_tools {
+        let allowed = if args.check_tools {
+            vec!["check_tools", "format", "output"]
+        } else {
+            vec![
+                "recover",
+                "format",
+                "output",
+                "compare",
+                "regression",
+                "allow_mismatch",
+                "save_baseline",
+                "advanced",
+                "intermediate",
+                "view",
+            ]
+        };
+        for id in matches
+            .ids()
+            .filter(|id| command.get_arguments().any(|arg| arg.get_id() == *id))
+        {
+            if matches.value_source(id.as_str()) == Some(clap::parser::ValueSource::CommandLine)
+                && !allowed.contains(&id.as_str())
+            {
+                return Err(format!(
+                    "--{} does not apply to this mode",
+                    id.as_str().replace('_', "-")
+                ));
+            }
+        }
+        if args.check_tools && !["text", "json"].contains(&args.format.as_str()) {
+            return Err("--check-tools supports text or json output".into());
+        }
+    }
+    // Output destinations must not clobber a journal or another requested report.
+    let paths = [
+        args.output.as_deref(),
+        args.save_baseline.as_deref(),
+        args.checkpoint.as_deref(),
+    ];
+    let canonical = |p: &Path| -> Result<PathBuf, String> {
+        if p.exists() {
+            return p.canonicalize().map_err(|e| e.to_string());
+        }
+        let parent = p
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        Ok(parent
+            .canonicalize()
+            .map_err(|e| e.to_string())?
+            .join(p.file_name().ok_or("output path needs a file name")?))
     };
+    let mut destinations = Vec::new();
+    for path in paths.into_iter().flatten() {
+        let path = canonical(path)?;
+        if destinations.contains(&path) {
+            return Err("output, baseline, and checkpoint paths must differ".into());
+        }
+        if args
+            .recover
+            .as_deref()
+            .is_some_and(|p| canonical(p).ok().as_ref() == Some(&path))
+        {
+            return Err("output must not overwrite the recovery journal".into());
+        }
+        destinations.push(path);
+    }
+    let baseline = args.compare.as_deref().map(comparison::load).transpose()?;
+    let limits = comparison::thresholds(&args.regression)?;
     let view = if args.advanced {
         View::Advanced
     } else if args.intermediate {
@@ -432,13 +663,85 @@ fn app() -> Result<i32, String> {
     } else {
         args.view
     };
-    let output = report::render(
-        &report,
-        &args.format,
-        &selected,
-        view,
-        args.metrics.is_some(),
-    );
+    let mut journal = experiment::Journal::open(args.checkpoint.as_deref())?;
+    let mut report = if let Some(path) = &args.recover {
+        experiment::recover(path)?
+    } else if args.check_tools {
+        diagnostics::check_tools()?
+    } else if args.suite.is_some() {
+        suite::execute(&args, &mut journal)?
+    } else {
+        let selected = select_metrics(args.metrics.as_deref().unwrap_or("all"))?;
+        match execute(&args, &selected, &mut journal)? {
+            Outcome::Report(r) => r,
+            Outcome::Interrupted(signal) => {
+                eprintln!("cppbench: compilation interrupted");
+                return Ok(128 + signal);
+            }
+        }
+    };
+    if let Some(baseline) = baseline {
+        comparison::apply(&mut report, &baseline, &limits, args.allow_mismatch);
+    }
+    journal.emit(json!({"event":"final","report":report}))?;
+    if let Some(path) = &args.save_baseline {
+        if report["kind"] == "tool_check"
+            || report["completed"] != true
+            || report["cases"]
+                .as_array()
+                .map(|a| a.iter().any(|r| r["measurement_passed"] != true))
+                .unwrap_or(report["measurement_passed"] != true)
+        {
+            return Err("cannot save an incomplete or failed measurement baseline".into());
+        }
+        experiment::write_json(path, &report)?;
+    }
+    let output = if report["kind"] == "tool_check" {
+        if args.format == "json" {
+            serde_json::to_string_pretty(&report).unwrap() + "\n"
+        } else {
+            let mut out = String::from("cppbench tool compatibility check\n");
+            for (name, value) in report["tools"].as_object().unwrap() {
+                out.push_str(&format!(
+                    "{name}: {} | {}\n",
+                    value["status"].as_str().unwrap_or("unavailable"),
+                    value["identity"]
+                        .as_str()
+                        .unwrap_or(value["reason"].as_str().unwrap_or(""))
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                ));
+            }
+            for (name, probe) in report["counter_probes"].as_object().unwrap() {
+                let status = probe["status"].as_str().unwrap_or("unavailable");
+                out.push_str(&format!("{name} counter access: {status}\n"));
+                if status != "ok" {
+                    out.push_str(probe["stderr"].as_str().unwrap_or(""));
+                    out.push('\n');
+                }
+            }
+            out
+        }
+    } else if report["cases"].is_array() {
+        suite::render(&report, &args.format, view)
+    } else if args.format == "html" {
+        html::render(&report)
+    } else {
+        let selected = report["selected_metrics"]
+            .as_array()
+            .ok_or("report lacks metric selection")?
+            .iter()
+            .filter_map(|n| METRICS.iter().position(|m| Some(m.0) == n.as_str()))
+            .collect::<Vec<_>>();
+        report::render(
+            &report,
+            &args.format,
+            &selected,
+            view,
+            report["custom_metrics"] == true,
+        )
+    };
     if let Some(path) = &args.output {
         std::fs::write(path, output).map_err(|e| e.to_string())?;
     } else {
@@ -447,18 +750,32 @@ fn app() -> Result<i32, String> {
             .write_all(output.as_bytes())
             .map_err(|e| e.to_string())?;
     }
-    let interrupted = report["interrupt_signal"].as_i64().unwrap_or(0);
-    if interrupted != 0 {
-        return Ok(128 + interrupted as i32);
+    if report["kind"] == "tool_check" {
+        let signal = report["interrupt_signal"].as_i64().unwrap_or(0);
+        if signal != 0 {
+            return Ok(128 + signal as i32);
+        }
+        return Ok(
+            if report["tools"]
+                .as_object()
+                .unwrap()
+                .values()
+                .any(|v| v["status"] != "ok")
+                || report["counter_probes"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .any(|v| v["status"] != "ok")
+            {
+                1
+            } else {
+                0
+            },
+        );
     }
-    Ok(
-        if report["successful_runs"] == args.runs && report["diagnostics"]["failed"] != true {
-            0
-        } else {
-            1
-        },
-    )
+    Ok(comparison::exit_code(&report))
 }
+
 fn main() {
     let code = match app() {
         Ok(code) => code,

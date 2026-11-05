@@ -1,0 +1,9 @@
+[
+  {"clients":{"0":{"pid":42,"engine-classes":{"Render/3D":{"busy":99}}}}},
+  {"clients":{
+    "1":{"pid":"42","engine-classes":{"Render/3D":{"busy":"20"}},"memory":{"system":{"resident":1024}}},
+    "2":{"pid":42,"engine-classes":{"Render/3D":{"busy":10}},"memory":{"system":{"resident":2048}}},
+    "3":{"pid":99,"engine-classes":{"Render/3D":{"busy":80}},"memory":{"system":{"resident":8192}}}
+  }},
+  {"clients":{"3":{"pid":99,"engine-classes":{"Render/3D":{"busy":90}}}}}
+]
