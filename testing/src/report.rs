@@ -299,6 +299,7 @@ pub fn render(
         let _ = writeln!(out, "Note: {}", warning.as_str().unwrap());
     }
     render_diagnostics(&mut out, report, view);
+    out.push_str(&crate::profiles::render(report, view != View::Simple));
     if report["comparison"].is_object() {
         let _ = writeln!(
             out,

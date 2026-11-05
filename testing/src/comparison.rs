@@ -21,11 +21,15 @@ pub fn thresholds(values: &[String]) -> Result<BTreeMap<String, f64>, String> {
             .ok_or("regression must be METRIC=PERCENT")?;
         if !crate::METRICS.iter().any(|m| m.0 == name)
             && !["allocations", "heap_peak", "leaked_bytes"].contains(&name)
+            && crate::profiles::metric(name).is_none()
         {
             return Err(format!("unknown regression metric: {name}"));
         }
         if ["cpu_percent", "stdout_bytes", "stderr_bytes"].contains(&name) {
             return Err(format!("{name} has no automatic better/worse direction"));
+        }
+        if crate::profiles::metric(name).is_some_and(|m| m.kind != "samples" || m.unit != "ms") {
+            return Err(format!("{name} has no automatic improvement direction; domain regression gates currently support duration sample metrics in ms"));
         }
         let n = value
             .parse::<f64>()
@@ -37,6 +41,17 @@ pub fn thresholds(values: &[String]) -> Result<BTreeMap<String, f64>, String> {
     Ok(result)
 }
 fn metric(report: &Value, name: &str) -> Option<f64> {
+    if let Some(spec) = crate::profiles::metric(name) {
+        let value = &report["profiles"]["metrics"][name];
+        if value["status"] != "ok" {
+            return None;
+        }
+        return if spec.kind == "samples" {
+            value["summary"]["p95"].as_f64()
+        } else {
+            value["value"].as_f64()
+        };
+    }
     let number = match name {
         "allocations" => report["diagnostics"]["results"]["heaptrack"]["allocation_calls"].as_f64(),
         "heap_peak" => {
@@ -57,6 +72,9 @@ fn metric(report: &Value, name: &str) -> Option<f64> {
 fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, allow: bool) -> Value {
     let mut differences = Vec::<String>::new();
     let mut warnings = Vec::new();
+    if current["profiles"]["flags"] != baseline["profiles"]["flags"] {
+        differences.push("domain profile selection differs".into());
+    }
     let mut invalid = false;
     for key in ["cpu_model", "kernel", "hostname"] {
         if !baseline["provenance"][key].is_null()
@@ -132,6 +150,12 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
             Some((after - before) / before * 100.)
         };
         let higher_better = name == "throughput";
+        if crate::profiles::metric(&name).is_some()
+            && baseline["profiles"]["metrics"][&name]["source"]
+                != current["profiles"]["metrics"][&name]["source"]
+        {
+            differences.push(format!("{name} measurement source differs"));
+        }
         let worsening = change.map(|p| if higher_better { -p } else { p });
         let regression = limits.get(&name).is_some_and(|limit| {
             worsening
@@ -140,7 +164,7 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
         });
         changes.push(json!({"metric":name,"baseline":before,"current":after,"change_percent":change,
             "worsening_percent":worsening,"higher_is_better":higher_better,"threshold_percent":limits.get(&name),"regression":regression,
-            "statistic":if name=="rss" {"maximum peak RSS"}else if ["allocations","heap_peak","leaked_bytes"].contains(&name.as_str()) {"single diagnostic replay"}else{"median"}}));
+            "statistic":if crate::profiles::metric(&name).is_some() {"p95 samples from a single diagnostic replay"}else if name=="rss" {"maximum peak RSS"}else if ["allocations","heap_peak","leaked_bytes"].contains(&name.as_str()) {"single diagnostic replay"}else{"median"}}));
     }
     for name in missing {
         invalid = true;
@@ -184,15 +208,18 @@ pub fn exit_code(report: &Value) -> i32 {
     }
     if let Some(cases) = report["cases"].as_array() {
         if report["completed"] != true
-            || cases
-                .iter()
-                .any(|r| r["measurement_passed"] != true || r["diagnostics"]["failed"] == true)
+            || cases.iter().any(|r| {
+                r["measurement_passed"] != true
+                    || r["diagnostics"]["failed"] == true
+                    || r["profiles"]["failed"] == true
+            })
         {
             return 1;
         }
     } else if report["completed"] != true
         || report["measurement_passed"] != true
         || report["diagnostics"]["failed"] == true
+        || report["profiles"]["failed"] == true
     {
         return 1;
     }

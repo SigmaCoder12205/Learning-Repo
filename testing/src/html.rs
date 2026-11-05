@@ -190,6 +190,13 @@ fn section(report: &Value) -> String {
         }
     }
     let hotspots = &report["diagnostics"]["results"]["hotspots"];
+    if report["profiles"].is_object() {
+        let _ = write!(
+            out,
+            "<h3>Domain-specific results</h3><pre>{}</pre>",
+            escape(&crate::profiles::render(report, true))
+        );
+    }
     if hotspots["status"] == "ok" {
         out.push_str("<h3>CPU function samples</h3><div class=flamegraph>");
         out.push_str(&crate::hotspots::flamegraph(hotspots));

@@ -6,6 +6,8 @@ build:
 
 install: build
 	install -Dm755 target/release/cppbench "$(DESTDIR)$(PREFIX)/bin/cppbench"
+	install -Dm644 include/cppbench_telemetry.h "$(DESTDIR)$(PREFIX)/include/cppbench_telemetry.h"
+	install -Dm644 docs/profiles.md "$(DESTDIR)$(PREFIX)/share/doc/cppbench/profiles.md"
 
 test:
 	cargo test --locked

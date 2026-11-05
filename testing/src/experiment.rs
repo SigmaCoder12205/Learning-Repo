@@ -143,6 +143,12 @@ pub fn refresh(report: &mut Value) {
     report["successful_runs"] = json!(count);
 }
 pub fn validate(args: &Cli) -> Result<(), String> {
+    if args.require_profile_data && args.profile_flags.is_empty() {
+        return Err("--require-profile-data needs a domain profile; use --list-profiles".into());
+    }
+    if args.deadline_ms.is_some() && !args.profile_flags.iter().any(|p| p == "embedded") {
+        return Err("--deadline-ms requires --embedded".into());
+    }
     if (args.adaptive || args.min_time.is_some()) && args.max_runs < args.runs {
         return Err("--max-runs must be at least --runs".into());
     }

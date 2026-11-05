@@ -1,0 +1,8 @@
+123 read(3</usr/lib/libc.so.6>, ""..., 1024) = 1024 <0.000005>
+123 socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) = 4<TCP:[456]> <0.000010>
+123 connect(4<TCP:[456]>, {...}, 16) = -1 EINPROGRESS (Operation now in progress) <0.000020>
+123 sendto(4<TCP:[127.0.0.1:1->127.0.0.1:2]>, ""..., 64, 0, NULL, 0) = 64 <0.000030>
+123 recvfrom(4<TCP:[456]>,  <unfinished ...>
+456 getsockname(5<TCP:[789]>, {...}, [16]) = 0 <0.000010>
+123 <... recvfrom resumed>""..., 64, 0, NULL, NULL) = 64 <0.002000>
+123 write(1</tmp/stdout>, ""..., 30) = 30 <0.000001>

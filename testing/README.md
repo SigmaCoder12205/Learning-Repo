@@ -12,6 +12,8 @@ Rust handles the CLI, statistics, correctness checks, and reports. C handles pro
 
 Version 0.5 adds saved comparisons and regression gates, workload suites, CPU hotspots and flamegraphs, adaptive sampling, CPU affinity, target-PID Intel GPU metrics, offline HTML reports, and checkpoint recovery. See [the experiment guide](docs/experiments.md) for commands, configuration, and limitations.
 
+Version **0.6** adds **10 domain flags with 3 subflags each**, including `--networking --bandwidth`, `--gamedev --graphics`, and `--backend --api`. The normal report stays intact; domain sections add traced socket statistics, GPU diagnostics, and validated application telemetry. Run `cppbench --list-profiles` for all 40 flags and 90 supported metric keys. See [domain profiles and instrumentation](docs/profiles.md) for the full matrix, research sources, and examples. `strace` is an optional dependency for automatic socket tracing.
+
 ## Build and install
 
 Requirements: Linux, Rust/Cargo, a C compiler (`cc`, GCC, or Clang), and a linker. A C++ compiler is only needed for source-compilation mode. Cargo downloads build dependencies on the first build; `Cargo.lock` pins their versions.

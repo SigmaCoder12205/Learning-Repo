@@ -2,7 +2,7 @@ use crate::{
     experiment::{self, Journal},
     Cli, Outcome,
 };
-use clap::Parser;
+use clap::FromArgMatches;
 use serde_json::{json, Value};
 use std::{
     collections::BTreeSet,
@@ -73,6 +73,13 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
         for (key, value) in values {
             let flag = format!("--{}", key.replace('_', "-"));
             match key.as_str() {
+                key if crate::profiles::flag_names().any(|f| f == key.replace('_', "-"))
+                    || key == "require_profile_data" =>
+                {
+                    if value.as_bool().ok_or("profile flags must be booleans")? {
+                        argv.push(flag.into());
+                    }
+                }
                 "args" => {
                     target_args = value
                         .as_array()
@@ -127,12 +134,26 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                             .into(),
                     );
                 }
+                "frame_budget_ms" | "deadline_ms" => {
+                    argv.push(flag.into());
+                    argv.push(
+                        value
+                            .as_f64()
+                            .ok_or("profile budgets must be numbers")?
+                            .to_string()
+                            .into(),
+                    );
+                }
                 _ => return Err(format!("unknown benchmark option {key}")),
             }
         }
         argv.push("--".into());
         argv.extend(target_args);
-        let args = Cli::try_parse_from(argv).map_err(|e| format!("benchmark {name}: {e}"))?;
+        let matches = crate::profiles::command()
+            .try_get_matches_from(argv)
+            .map_err(|e| format!("benchmark {name}: {e}"))?;
+        let mut args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
+        args.profile_flags = crate::profiles::selection(&matches);
         experiment::validate(&args)?;
         let binary = args
             .executable

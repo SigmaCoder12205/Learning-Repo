@@ -3,6 +3,7 @@ mod diagnostics;
 mod experiment;
 mod hotspots;
 mod html;
+mod profiles;
 mod report;
 mod runner;
 mod suite;
@@ -213,6 +214,20 @@ struct Cli {
     /// Extra CPU sampling pass with function hotspots and a flamegraph
     #[arg(long)]
     hotspots: bool,
+    /// List the 10 domain profiles, 30 focus flags and application metric keys
+    #[arg(long)]
+    list_profiles: bool,
+    /// Fail when any selected domain metric is unavailable
+    #[arg(long)]
+    require_profile_data: bool,
+    /// Presented-frame budget in milliseconds for game/mobile telemetry
+    #[arg(long, default_value = "16.666667", value_parser = positive)]
+    frame_budget_ms: f64,
+    /// Control-cycle deadline in milliseconds for embedded telemetry
+    #[arg(long, value_parser = positive)]
+    deadline_ms: Option<f64>,
+    #[arg(skip)]
+    profile_flags: Vec<String>,
     /// Arguments passed verbatim to the target after --
     #[arg(last = true)]
     args: Vec<OsString>,
@@ -531,6 +546,12 @@ fn execute(
         report["gpu"] = diagnostics["results"]["gpu"].clone();
     }
     report["diagnostics"] = diagnostics;
+    if !args.profile_flags.is_empty() {
+        report["profiles"] = profiles::build(args, &report);
+        if let Some(dir) = report["diagnostics"]["artifact_directory"].as_str() {
+            experiment::write_json(&Path::new(dir).join("profiles.json"), &report["profiles"])?;
+        }
+    }
     report["interrupt_signal"] = json!(cancelled);
     report["completed"] = json!(cancelled == 0);
     journal.emit(json!({"event":"report","report":report}))?;
@@ -544,10 +565,24 @@ fn display_command(command: &[OsString]) -> Vec<String> {
         .collect()
 }
 fn app() -> Result<i32, String> {
-    use clap::{CommandFactory, FromArgMatches};
-    let command = Cli::command();
+    use clap::FromArgMatches;
+    let command = profiles::command();
     let matches = command.clone().get_matches();
-    let args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
+    let mut args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
+    args.profile_flags = profiles::selection(&matches);
+    if args.list_profiles {
+        let output = if args.format == "json" {
+            serde_json::to_string_pretty(&profiles::catalog_json()).unwrap() + "\n"
+        } else {
+            profiles::catalog_text()
+        };
+        if let Some(path) = &args.output {
+            std::fs::write(path, output).map_err(|e| e.to_string())?;
+        } else {
+            print!("{output}");
+        }
+        return Ok(0);
+    }
     if args.list_metrics {
         for (name, unit, description) in METRICS {
             println!("{name:24} {unit:10} {description}");
