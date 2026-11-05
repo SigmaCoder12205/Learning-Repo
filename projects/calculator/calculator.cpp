@@ -1,3 +1,6 @@
+// Turn the while loop into a function 
+// Then fix if the user enters less than 2 numbers in subtraction and other files 
+
 #include <iostream>
 #include <vector>
 #include <string>
@@ -12,7 +15,7 @@ double divide(std::vector<double> numbers);
 int main(){
     char operation;
     bool running = true;
-    double num;
+    bool redo = false;
     std::string temp;
     std::vector<double> numbers;
 
@@ -50,8 +53,16 @@ int main(){
     break;
 
     case '-':
-        std::cout << subtract(numbers) << std::endl;
-    break;
+
+        if(numbers.size() < 2){
+            std::cout << "Must enter more than 2 numbers" << std::endl;
+            redo = true;
+            break;
+        }
+        else{
+            std::cout << subtract(numbers) << std::endl;
+            break;
+        }
 
     case '*':
         std::cout << multiple(numbers) << std::endl;
@@ -69,7 +80,7 @@ int main(){
 }
 
 double add(std::vector<double> numbers){
-    double total;
+    double total = 0;
 
     for(int i = 0; i < numbers.size(); i++){
         total += numbers[i];
@@ -79,7 +90,8 @@ double add(std::vector<double> numbers){
 }
 
 double subtract(std::vector<double> numbers){
-    double total;
+    double total = 0;
+
 
     total = numbers[0] - numbers[1];
 
@@ -101,7 +113,7 @@ double multiple(std::vector<double> numbers){
 }
 
 double divide(std::vector<double> numbers){
-    double total;
+    double total = 0;
 
     total = numbers[0] / numbers[1];
 

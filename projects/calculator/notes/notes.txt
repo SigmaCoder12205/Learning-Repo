@@ -1,0 +1,44 @@
+Claude ideas to make it better
+
+Bugs
+
+
+Uninitialized total in add, subtract and divide.
+double total; holds garbage, so add returns the wrong answer.
+Use double total = 0; in add.
+In subtract and divide it’s assigned right away, so they’re fine, but it’s still good to initialize.
+
+Out-of-bounds access. 
+subtract and divide read numbers[0] and numbers[1] even if the user entered fewer than two numbers.
+That’s undefined behavior. Check numbers.size() first.
+
+Division by zero isn’t handled.
+With doubles you get inf or nan silently.
+
+Invalid input is silently treated like quitting. 
+If someone types abc, the loop ends and it calculates with what it has.
+It’s better to say “invalid number” and ask again.
+
+Invalid operators do nothing. 
+The default: case exits silently.
+Validate the operator up front and re-prompt.
+
+
+Style and quality
+
+
+Pass vectors by const&, as in const std::vector<double>&. Right now every call copies the whole vector.
+
+Use size_t or a range-for instead of int i < numbers.size() (signed/unsigned comparison warning).
+
+running is redundant. You always break, so the flag is never read.
+
+ss.str(temp) is redundant because you already passed temp to the constructor.
+
+ss.eof() as a “whole string was a number” check is fragile. "5 " with a trailing space fails.
+
+Trying to extract a second token is more robust.
+
+Typo: multiple should be multiply.
+
+Move parsing into its own function so main stays readable.
