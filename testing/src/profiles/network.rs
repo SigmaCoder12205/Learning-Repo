@@ -179,9 +179,9 @@ pub fn parse(text: &str) -> Result<Value, String> {
         metrics.insert(key.into(),json!({"status":"ok","value":value,"unit":unit,"kind":"counter","source":"strace; separate replay including traced descendants"}));
     }
     if !durations.is_empty() {
-        let mut summary = crate::summarize_basic(durations.clone());
+        let mut summary = crate::stats::summarize_basic(durations.clone());
         durations.sort_by(f64::total_cmp);
-        summary["p99"] = json!(crate::percentile(&durations, 0.99));
+        summary["p99"] = json!(crate::stats::percentile(&durations, 0.99));
         metrics.insert("networking.syscall_ms".into(),json!({"status":"ok","unit":"ms","kind":"samples","summary":summary,"source":"strace elapsed syscall time; perturbed by tracing"}));
     }
     Ok(

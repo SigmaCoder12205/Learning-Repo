@@ -176,7 +176,7 @@ pub fn run_logged(
         let mut metrics = serde_json::Map::new();
         for &index in selected {
             metrics.insert(
-                crate::METRICS[index].0.into(),
+                crate::metrics::METRICS[index].0.into(),
                 json!(measured.metrics[index]),
             );
         }
@@ -187,4 +187,11 @@ pub fn run_logged(
         )
     };
     work().map_err(|e| e.to_string())
+}
+
+pub(crate) fn display_command(command: &[OsString]) -> Vec<String> {
+    command
+        .iter()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
 }

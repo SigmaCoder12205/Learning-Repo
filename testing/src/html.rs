@@ -206,7 +206,11 @@ fn section(report: &Value) -> String {
         .as_array()
         .map(|a| {
             a.iter()
-                .filter_map(|n| crate::METRICS.iter().position(|m| Some(m.0) == n.as_str()))
+                .filter_map(|n| {
+                    crate::metrics::METRICS
+                        .iter()
+                        .position(|m| Some(m.0) == n.as_str())
+                })
                 .collect()
         })
         .unwrap_or_default();

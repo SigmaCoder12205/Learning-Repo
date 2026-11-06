@@ -1,7 +1,8 @@
 [package]
 name = "cppbench"
-version = "0.6.0"
+version = "0.8.0"
 edition = "2021"
+rust-version = "1.89"
 description = "Native Rust and C process benchmark CLI for Linux"
 license = "MIT"
 build = "build.rs"
@@ -12,6 +13,12 @@ serde_json = "1"
 tempfile = "3"
 roxmltree = "0.20"
 sha2 = "0.10"
+rand_core = { version = "0.6", features = ["getrandom"] }
+zeroize = "1"
+serde = { version = "1", features = ["derive"] }
+libc = "0.2"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+base64 = "0.22"
 
 [build-dependencies]
 cc = "1"

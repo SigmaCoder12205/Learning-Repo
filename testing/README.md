@@ -14,9 +14,19 @@ Version 0.5 adds saved comparisons and regression gates, workload suites, CPU ho
 
 Version **0.6** adds **10 domain flags with 3 subflags each**, including `--networking --bandwidth`, `--gamedev --graphics`, and `--backend --api`. The normal report stays intact; domain sections add traced socket statistics, GPU diagnostics, and validated application telemetry. Run `cppbench --list-profiles` for all 40 flags and 90 supported metric keys. See [domain profiles and instrumentation](docs/profiles.md) for the full matrix, research sources, and examples. `strace` is an optional dependency for automatic socket tracing.
 
+Version **0.8** replaces the local Rust account database with **Keycloak + PostgreSQL**. Accounts have no expiration date; the CLI keeps a persistent, revocable login using OAuth/PKCE and offline refresh. Passwords and account management live in Keycloak's browser pages. Benchmarking works without login or the account service. See [accounts and local setup](docs/accounts.md), including the ten-year inactivity limit on saved logins.
+
+```bash
+./auth/scripts/setup.sh          # Requires Docker + Compose; first run downloads images
+cppbench account register       # Register in your browser and sign in
+cppbench account whoami
+cppbench account logout
+cppbench account login
+```
+
 ## Build and install
 
-Requirements: Linux, Rust/Cargo, a C compiler (`cc`, GCC, or Clang), and a linker. A C++ compiler is only needed for source-compilation mode. Cargo downloads build dependencies on the first build; `Cargo.lock` pins their versions.
+Requirements: Linux, Rust 1.89+ and Cargo, a C compiler (`cc`, GCC, or Clang), and a linker. A C++ compiler is only needed for source-compilation mode. Cargo downloads build dependencies on the first build; `Cargo.lock` pins their versions.
 
 ```bash
 make install
@@ -286,11 +296,10 @@ Warmups may prime filesystem caches but do not transfer process-local state to l
 ## Development
 
 ```bash
-cargo test --locked
-cargo fmt --check
-cargo clippy --locked --all-targets -- -D warnings
+make fmt
+make verify
 ```
 
-`src/main.rs` implements CLI options, experiment coordination, and statistics. `src/report.rs` implements the three text views, unit formatting, and exports. `src/diagnostics.rs` orchestrates optional tools, retains artifacts, and parses their reports. `src/runner.rs` owns file/string lifetimes and the C FFI boundary. `native/measure.c` implements measurement; `native/measure.h` documents the ABI. `build.rs` compiles and links C. Tests cover report views, parsing, metric filtering, C++ compilation, target arguments, correctness checks, exports, failed-run exclusion, missing tools, GPU permission errors, instrumented-run isolation, timeout cleanup, and interruption cleanup. Tool-fixture tests run without special hardware or elevated permissions.
+See [the development guide](docs/development.md) for the module map, execution flow, test commands, and instructions for adding profiles or diagnostic tools. The entrypoint delegates to separate CLI, application, benchmark, statistics, and storage modules. Each external tool owns its runner, parser, and parser tests under `src/diagnostics/`. Profile definitions, telemetry, networking, and presentation live under `src/profiles/`. The Rust/C measurement boundary remains in `src/runner.rs` and `native/measure.c`.
 
 JSON uses `schema_version: 3`, with additive `gpu` and `diagnostics` objects. Metric names and successful-run aggregation remain consistent. Complete statistical columns are available in advanced text view and JSON. Diagnostic measurements are nested separately and never enter baseline aggregates.

@@ -1,4 +1,4 @@
-use crate::METRICS;
+use crate::metrics::METRICS;
 use clap::ValueEnum;
 use serde_json::Value;
 use std::fmt::Write;
@@ -499,7 +499,7 @@ mod tests {
     fn overview_uses_average_time_and_highest_peak_memory() {
         let report = json!({"command": ["./program"], "successful_runs": 2, "settings": {"runs": 2},
             "runs": [{"status": "ok"}, {"status": "ok"}], "warmups": [], "warnings": [],
-            "summary": {"wall": crate::summarize(vec![0.1, 0.3]), "rss": crate::summarize(vec![1024., 3072.])}});
+            "summary": {"wall": crate::stats::summarize(vec![0.1, 0.3]), "rss": crate::stats::summarize(vec![1024., 3072.])}});
         let text = render(&report, "text", &[0, 5], View::Simple, true);
         assert!(text.contains("200.000 ms (average per run)"), "{text}");
         assert!(

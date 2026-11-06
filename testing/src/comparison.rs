@@ -19,7 +19,7 @@ pub fn thresholds(values: &[String]) -> Result<BTreeMap<String, f64>, String> {
         let (name, value) = arg
             .split_once('=')
             .ok_or("regression must be METRIC=PERCENT")?;
-        if !crate::METRICS.iter().any(|m| m.0 == name)
+        if !crate::metrics::METRICS.iter().any(|m| m.0 == name)
             && !["allocations", "heap_peak", "leaked_bytes"].contains(&name)
             && crate::profiles::metric(name).is_none()
         {
@@ -28,7 +28,9 @@ pub fn thresholds(values: &[String]) -> Result<BTreeMap<String, f64>, String> {
         if ["cpu_percent", "stdout_bytes", "stderr_bytes"].contains(&name) {
             return Err(format!("{name} has no automatic better/worse direction"));
         }
-        if crate::profiles::metric(name).is_some_and(|m| m.kind != "samples" || m.unit != "ms") {
+        if crate::profiles::metric(name).is_some_and(|m| {
+            m.kind != crate::profiles::catalog::MetricKind::Samples || m.unit != "ms"
+        }) {
             return Err(format!("{name} has no automatic improvement direction; domain regression gates currently support duration sample metrics in ms"));
         }
         let n = value
@@ -46,7 +48,7 @@ fn metric(report: &Value, name: &str) -> Option<f64> {
         if value["status"] != "ok" {
             return None;
         }
-        return if spec.kind == "samples" {
+        return if spec.kind == crate::profiles::catalog::MetricKind::Samples {
             value["summary"]["p95"].as_f64()
         } else {
             value["value"].as_f64()

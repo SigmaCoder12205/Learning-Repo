@@ -1,7 +1,4 @@
-use crate::{
-    experiment::{self, Journal},
-    Cli, Outcome,
-};
+use crate::{benchmark::Outcome, cli::Cli, experiment, storage::Journal};
 use clap::FromArgMatches;
 use serde_json::{json, Value};
 use std::{
@@ -176,7 +173,7 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                 ));
             }
         }
-        crate::select_metrics(args.metrics.as_deref().unwrap_or("all"))?;
+        crate::metrics::select_metrics(args.metrics.as_deref().unwrap_or("all"))?;
         result.push(args);
     }
     Ok(result)
@@ -195,8 +192,8 @@ pub fn execute(args: &Cli, journal: &mut Journal) -> Result<Value, String> {
                 plan.name.as_deref().unwrap()
             );
         }
-        let selected = crate::select_metrics(plan.metrics.as_deref().unwrap_or("all"))?;
-        let result = match crate::execute(&plan, &selected, journal) {
+        let selected = crate::metrics::select_metrics(plan.metrics.as_deref().unwrap_or("all"))?;
+        let result = match crate::benchmark::execute(&plan, &selected, journal) {
             Ok(Outcome::Report(value)) => value,
             Ok(Outcome::Interrupted(signal)) => {
                 json!({"name":plan.name,"error":"compilation interrupted","interrupt_signal":signal,"completed":false,"measurement_passed":false,"runs":[],"warmups":[],"selected_metrics":[]})
@@ -267,7 +264,11 @@ pub fn render(report: &Value, format: &str, view: crate::report::View) -> String
             .as_array()
             .unwrap()
             .iter()
-            .filter_map(|n| crate::METRICS.iter().position(|m| Some(m.0) == n.as_str()))
+            .filter_map(|n| {
+                crate::metrics::METRICS
+                    .iter()
+                    .position(|m| Some(m.0) == n.as_str())
+            })
             .collect();
         out.push_str(&crate::report::render(
             case,
