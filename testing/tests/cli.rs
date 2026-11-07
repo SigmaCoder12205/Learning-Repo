@@ -470,3 +470,95 @@ fn compiler_interruption_cleans_up_and_returns_signal_exit_code() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("compilation interrupted"));
     assert_dead(&fs::read_to_string(pidfile).unwrap());
 }
+
+#[test]
+fn eof_prompt_loop_reports_bounded_output_and_input_replay_resolves_it() {
+    // Models a prompt loop that keeps running after a failed input read, like the calculator.
+    let script = r#"while :; do printf '\033[31mEnter number (q to quit): '; read -r value; [ "$value" = q ] && break; done"#;
+    let common = [
+        "/bin/sh",
+        "--runs",
+        "2",
+        "--output-limit",
+        "0.001",
+        "--metrics",
+        "wall",
+    ];
+    let mut args = common.to_vec();
+    args.extend(["--format", "json", "--", "-c", script]);
+    let output = bench(&args);
+    assert_eq!(output.status.code(), Some(1));
+    let r = report(&output);
+    assert_eq!(r["warmups"][0]["status"], "output_limit");
+    assert!(r["runs"].as_array().unwrap().is_empty());
+    assert_eq!(r["warmups"][0]["metrics"].as_object().unwrap().len(), 1);
+    assert!(
+        r["warmups"][0]["captured_output"]["stdout_bytes"]
+            .as_f64()
+            .unwrap()
+            > 1024.0
+    );
+    assert_eq!(
+        r["warmups"][0]["stdout_preview"].as_str().unwrap().len(),
+        512
+    );
+    assert_eq!(r["warmups"][0]["stdout_preview_truncated"], true);
+    assert_eq!(r["warmups"][0]["stderr_preview"], "");
+
+    let mut args = common.to_vec();
+    args.extend(["--intermediate", "--", "-c", script]);
+    let output = bench(&args);
+    let text = String::from_utf8(output.stdout).unwrap();
+    for message in [
+        "Measured runs did not start because a warmup failed",
+        "Output limit exceeded:",
+        "combined limit 0.001 MiB",
+        "stdout (escaped",
+        "[truncated]",
+        "--input FILE",
+        "immediate EOF",
+    ] {
+        assert!(text.contains(message), "missing {message}: {text}");
+    }
+    assert!(
+        !text.contains('\x1b'),
+        "terminal escape sequences must be escaped"
+    );
+    assert!(!text.contains("stderr (escaped)"));
+    assert!(!text.contains("Fewer than five successful measurements"));
+
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("input.txt");
+    fs::write(&input, "q\n").unwrap();
+    let mut args = common.to_vec();
+    args.extend([
+        "--input",
+        input.to_str().unwrap(),
+        "--format",
+        "json",
+        "--",
+        "-c",
+        script,
+    ]);
+    let output = bench(&args);
+    successful(&output);
+    let r = report(&output);
+    assert_eq!(r["successful_runs"], 2);
+    assert_eq!(r["warmups"][0]["status"], "ok");
+    assert!(r["runs"][0].get("stdout_preview").is_none());
+
+    fs::write(&input, "").unwrap();
+    let output = bench(&[
+        "/bin/sh",
+        "--input",
+        input.to_str().unwrap(),
+        "--output-limit",
+        "0.001",
+        "--",
+        "-c",
+        script,
+    ]);
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("replay file eventually reaches EOF"));
+    assert!(!text.contains("stdin is /dev/null"));
+}

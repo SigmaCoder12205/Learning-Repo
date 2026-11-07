@@ -52,6 +52,7 @@ pub(crate) struct Cli {
     /// Combined stdout/stderr limit in MiB
     #[arg(long, default_value = "64", value_parser = positive)]
     pub(crate) output_limit: f64,
+    /// Replay this file as stdin for every invocation (default: /dev/null, immediate EOF)
     #[arg(long)]
     pub(crate) input: Option<PathBuf>,
     #[arg(long)]

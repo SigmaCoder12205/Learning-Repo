@@ -121,6 +121,15 @@ pub fn render(
     let good = report["successful_runs"].as_u64().unwrap_or(0);
     if good == 0 {
         out.push_str("No successful measurements. Resource summaries are unavailable.\n");
+        if runs.is_empty()
+            && report["warmups"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|row| row["status"] != "ok")
+        {
+            out.push_str("Measured runs did not start because a warmup failed.\n");
+        }
     } else if view == View::Simple {
         out.push_str("\nOverview (successful runs)\n");
         for &i in visible {
@@ -289,11 +298,55 @@ pub fn render(
             if row["status"] != "ok" {
                 let _ = writeln!(
                     out,
-                    "{} #{}: {} (exit {})\nstderr (escaped): {}",
-                    phase, row["run"], row["status"], row["exit_code"], row["stderr_preview"]
+                    "{} #{}: {} (exit {})",
+                    phase, row["run"], row["status"], row["exit_code"]
                 );
+                if row["status"] == "output_limit" {
+                    if let (Some(stdout), Some(stderr), Some(limit)) = (
+                        row["captured_output"]["stdout_bytes"].as_f64(),
+                        row["captured_output"]["stderr_bytes"].as_f64(),
+                        report["settings"]["output_limit_mib"].as_f64(),
+                    ) {
+                        let _ = writeln!(out, "Output limit exceeded: {stdout:.0} B stdout + {stderr:.0} B stderr (combined limit {limit} MiB).");
+                    }
+                }
+                if row["stdout_preview"]
+                    .as_str()
+                    .is_some_and(|s| !s.is_empty())
+                {
+                    let _ = writeln!(
+                        out,
+                        "stdout (escaped, up to 512 bytes): {}{}",
+                        row["stdout_preview"],
+                        if row["stdout_preview_truncated"] == true {
+                            " [truncated]"
+                        } else {
+                            ""
+                        }
+                    );
+                }
+                if row["stderr_preview"]
+                    .as_str()
+                    .is_some_and(|s| !s.is_empty())
+                {
+                    let _ = writeln!(out, "stderr (escaped): {}", row["stderr_preview"]);
+                }
             }
         }
+    }
+    if ["warmups", "runs"].iter().any(|phase| {
+        report[*phase]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["status"] == "output_limit")
+    }) {
+        if report["settings"]["input"].is_null() {
+            out.push_str("Input: stdin is /dev/null (immediate EOF). For a program that needs input, pass --input FILE; the file is replayed for every invocation.\n");
+        } else {
+            out.push_str("Input: the replay file eventually reaches EOF; include the program's exit command if it needs one.\n");
+        }
+        out.push_str("Repeated prompts can indicate an input loop that ignores EOF. Check failed input reads in the target program.\n");
     }
     for warning in report["warnings"].as_array().unwrap() {
         let _ = writeln!(out, "Note: {}", warning.as_str().unwrap());

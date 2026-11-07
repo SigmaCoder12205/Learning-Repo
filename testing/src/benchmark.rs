@@ -248,7 +248,7 @@ pub(crate) fn execute(
             "Failures are excluded from summary statistics; inspect individual run statuses."
         ));
     }
-    if walls.len() < 5 {
+    if !walls.is_empty() && walls.len() < 5 {
         warnings.push(json!(
             "Fewer than five successful measurements; distribution statistics have limited value."
         ));

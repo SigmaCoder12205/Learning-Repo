@@ -1,3 +1,5 @@
+------------------------------------------------------------------------------------------------------------------------------------------
+
 how to take an input in C++ and assign it to a value
 where you don't know the data type
 
@@ -32,12 +34,41 @@ int main() {
     // Fallback: It remains a string
     std::cout << "Detected type: String (" << input << ")\n";
 }
-
+------------------------------------------------------------------------------------------------------------------------------------------
 
 how to clear input buffer in C++
 
 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
+------------------------------------------------------------------------------------------------------------------------------------------
+
 are std::vector pass by ref or value
 
 yes std::vector is pass by value by defualt
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+how to handle divison by zero
+
+#include <iostream>
+
+int main() {
+    int numerator = 10;
+    int denominator = 0;
+
+    if (denominator != 0) {
+        int result = numerator / denominator;
+        std::cout << "Result: " << result << "\n";
+    } else {
+        std::cerr << "Error: Cannot divide integers by zero!\n";
+        // Handle error gracefully (e.g., return, assign a default value, or exit)
+    }
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+how to check a type of variable in C++
+
+std::is_same_v<decltype(var), target_type>
+
+requires the #include <type_traits> header

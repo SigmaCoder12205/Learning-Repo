@@ -180,11 +180,22 @@ pub fn run_logged(
                 json!(measured.metrics[index]),
             );
         }
-        Ok(
-            json!({"status": status, "exit_code": measured.exit_code, "metrics": metrics,
+        let mut row = json!({"status": status, "exit_code": measured.exit_code, "metrics": metrics,
                   "interrupt_signal": measured.interrupt_signal,
-                  "stderr_preview": String::from_utf8_lossy(&preview)}),
-        )
+                  "stderr_preview": String::from_utf8_lossy(&preview)});
+        if status != "ok" {
+            // Read only after measurement. Failure context is independent of metric filtering.
+            output.seek(SeekFrom::Start(0))?;
+            let mut stdout = Vec::new();
+            output.take(512).read_to_end(&mut stdout)?;
+            row["stdout_preview"] = json!(String::from_utf8_lossy(&stdout));
+            row["stdout_preview_truncated"] = json!(measured.metrics[12] > 512.0);
+            row["captured_output"] = json!({
+                "stdout_bytes": measured.metrics[12],
+                "stderr_bytes": measured.metrics[13]
+            });
+        }
+        Ok(row)
     };
     work().map_err(|e| e.to_string())
 }

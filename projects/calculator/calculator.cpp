@@ -6,11 +6,12 @@
 #include <string>
 #include <sstream>
 #include <limits>
+#include <type_traits>
 
-double add(std::vector<double> numbers);
-double subtract(std::vector<double> numbers);
-double multiple(std::vector<double> numbers);
-double divide(std::vector<double> numbers);
+double add(const std::vector<double> &nums);
+double subtract(const std::vector<double> &nums);
+double multiple(const std::vector<double> &nums);
+double divide(const std::vector<double> &numbers);
 
 int main(){
     char operation;
@@ -42,14 +43,13 @@ int main(){
             numbers.push_back(value);
         }
         else{
-            running = false;
-            break;
+            std::cout << "Invaild type try again" << std::endl;
         }
     }
 
     switch (operation){
     case '+': 
-        std::cout <<add(numbers) << std::endl;
+        std::cout << add(numbers) << std::endl;
     break;
 
     case '-':
@@ -69,8 +69,14 @@ int main(){
     break;
     
     case '/':
-        std::cout << divide(numbers) << std::endl;
-    break;
+        if(numbers.size() < 2){
+            std::cout << "Must enter more than 2 numbers" << std::endl;
+            break;
+        }
+        else{
+            std::cout << divide(numbers) << std::endl;
+            break;
+        }
 
     default:
         break;
@@ -79,46 +85,50 @@ int main(){
     return 0;
 }
 
-double add(std::vector<double> numbers){
+double add(const std::vector<double> &nums){
     double total = 0;
 
-    for(int i = 0; i < numbers.size(); i++){
-        total += numbers[i];
+    for(int i = 0; i < nums.size(); i++){
+        total += nums[i];
     }
 
     return total;
 }
 
-double subtract(std::vector<double> numbers){
+double subtract(const std::vector<double> &nums){
     double total = 0;
 
 
-    total = numbers[0] - numbers[1];
+    total = nums[0] - nums[1];
 
-    for(int i = 2; i < numbers.size(); i++){
-        total -= numbers[i];
+    for(int i = 2; i < nums.size(); i++){
+        total -= nums[i];
     }
 
     return total;
 }
 
-double multiple(std::vector<double> numbers){
+double multiple(const std::vector<double> &nums){
     double total = 1;
 
-    for(int i = 0; i < numbers.size(); i++){
-        total *= numbers[i];
+    for(int i = 0; i < nums.size(); i++){
+        total *= nums[i];
     }
 
     return total;
 }
 
-double divide(std::vector<double> numbers){
+double divide(const std::vector<double> &nums){
     double total = 0;
 
-    total = numbers[0] / numbers[1];
+    total = nums[0] / nums[1];
 
-    for(int i = 2; i< numbers.size(); i++){
-        total /= numbers[i];
+    for(int i = 2; i< nums.size(); i++){
+        if(nums[i] == 0){
+            continue;
+        }
+
+        total /= nums[i];
     }
 
     return total;

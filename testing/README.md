@@ -163,6 +163,17 @@ cppbench ./solver --input cases/input.txt \
 
 Stdin is reopened for every invocation; the default is `/dev/null`. Expected output is compared byte-for-byte, including whitespace, final newlines, and binary data. Comparison happens after measured execution and uses fixed-size buffers. Without `--expect-output`, output correctness is not checked. Exit status is always checked; zero is expected by default, and negative codes represent signals.
 
+For a calculator that reads an operation, one number per line, then `q`, supply a complete session:
+
+```bash
+printf '+\n2\n3\nq\n' > calculator-input.txt
+cppbench ./calculator --input calculator-input.txt --intermediate
+```
+
+The same sample is included in `examples/calculator-input.txt`. Every warmup and measured run receives the whole file from the beginning. This measures the complete scripted process invocation, including prompts and input parsing, rather than just arithmetic.
+
+If the first warmup reaches `output_limit`, no measured runs start. A program that ignores failed reads at EOF can print prompts indefinitely, even though no person is typing. cppbench reports the captured byte counts, a bounded stdout preview, and input guidance. In C++, check `if (!(std::cin >> operation))` before using the operation and `if (!std::getline(std::cin, line))` before processing each line; exit or return an error on EOF instead of retrying forever. Increasing the output limit does not fix such a loop.
+
 ### Working directory, environment, and throughput
 
 ```bash
@@ -266,7 +277,7 @@ Every invocation starts a fresh process. Warmups are checked but excluded from s
 
 Only successful measured invocations contribute to summaries. Statistics include sample standard deviation, linearly interpolated p90/p95, and coefficient of variation (standard deviation / mean × 100). Single-sample standard deviation and zero-mean CV are zero by convention. No outliers are removed. JSON and detailed views include descriptive 95% mean bootstrap intervals (1000 deterministic resamples) and Tukey 1.5-IQR outlier counts. A single sample has no interval; adaptive stopping can affect interval coverage. Small-sample percentiles are descriptive and do not establish tail behavior.
 
-Statuses: `ok`, `timeout`, `output_limit`, `unexpected_exit`, `output_mismatch`, and `interrupted`. Failed runs retain metrics that may describe incomplete work. Stderr previews contain the first 4096 bytes, with invalid UTF-8 replaced. Launch/setup failures are errors, distinguished from a program that legitimately exits with code 127.
+Statuses: `ok`, `timeout`, `output_limit`, `unexpected_exit`, `output_mismatch`, and `interrupted`. Failed runs retain metrics that may describe incomplete work. Stderr previews contain the first 4096 bytes. Failed invocations additionally include `stdout_preview` (up to 512 bytes), `stdout_preview_truncated`, and `captured_output` with stdout/stderr byte counts, even when `--metrics` excludes I/O. Invalid UTF-8 is replaced, and terminal previews are escaped. Previews are read after measurement; successful stdout is not added to reports. Launch/setup failures are errors, distinguished from a program that legitimately exits with code 127.
 
 Exit codes:
 
@@ -289,7 +300,7 @@ Linux resource accounting may include descendants the target waits for; this is 
 
 Output is captured in temporary files, so printing can affect timing and filesystem counters. Output limits are best-effort and may overshoot; they are not hard disk quotas. Compiler output is limited to 16 MiB. Temporary storage follows system configuration, including `TMPDIR`. Deadlines are not hard real-time guarantees, especially for processes blocked in kernel operations.
 
-Programs execute with your permissions; this is **not a sandbox for untrusted code**. The target process group is killed on timeout, output-limit breach, interruption, and leader exit. Descendants that deliberately leave the group can escape cleanup. Programs must wait for their own children before returning. Interactive programs and persistent services are not suitable targets.
+Programs execute with your permissions; this is **not a sandbox for untrusted code**. The target process group is killed on timeout, output-limit breach, interruption, and leader exit. Descendants that deliberately leave the group can escape cleanup. Programs must wait for their own children before returning. Programs requiring a live terminal and persistent services are not suitable targets; prompt-based programs can be benchmarked with a complete, finite `--input` script.
 
 Warmups may prime filesystem caches but do not transfer process-local state to later invocations. CPU scaling, thermals, caches, background tasks, and scheduling affect results. The tool does not flush caches or change power policies; CPU pinning is available through --cpu-affinity. Baseline metrics do not include allocations, leaks, hardware counters, or GPU activity; those require the optional diagnostic passes. Energy measurement is not implemented.
 
