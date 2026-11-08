@@ -562,3 +562,72 @@ fn eof_prompt_loop_reports_bounded_output_and_input_replay_resolves_it() {
     assert!(text.contains("replay file eventually reaches EOF"));
     assert!(!text.contains("stdin is /dev/null"));
 }
+
+#[test]
+fn short_lived_target_peak_matches_its_own_kernel_accounting_after_free() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("rss.c");
+    let target = dir.path().join("rss");
+    let self_rss = dir.path().join("self-rss");
+    fs::write(
+        &source,
+        r#"
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/resource.h>
+int main(int argc, char **argv) {
+    if (argc != 2) return 2;
+    FILE *file = fopen(argv[1], "w");
+    if (!file) return 3;
+    size_t size = 64 * 1024 * 1024;
+    volatile unsigned char *memory = malloc(size);
+    if (!memory) return 4;
+    for (size_t i = 0; i < size; i += 4096) memory[i] = 1;
+    free((void *)memory);
+    struct rusage usage;
+    if (getrusage(RUSAGE_SELF, &usage)) return 5;
+    fprintf(file, "%ld\n", usage.ru_maxrss);
+    fclose(file);
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+    successful(
+        &Command::new("cc")
+            .args(["-O2", "-o"])
+            .arg(&target)
+            .arg(&source)
+            .output()
+            .unwrap(),
+    );
+    let output = bench(&[
+        target.to_str().unwrap(),
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+        "--format",
+        "json",
+        "--",
+        self_rss.to_str().unwrap(),
+    ]);
+    successful(&output);
+    let r = report(&output);
+    let measured = r["runs"][0]["metrics"]["rss"].as_f64().unwrap();
+    let reported: f64 = fs::read_to_string(self_rss)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    assert!(
+        reported >= 64. * 1024.,
+        "touched allocation missing from kernel peak: {reported}"
+    );
+    assert!(
+        (measured - reported).abs() < 1024.,
+        "cppbench {measured} vs target self-accounting {reported}"
+    );
+    assert_eq!(r["measurement_backend"], "isolated-c-wait4-v1");
+    assert_eq!(r["memory_accounting"]["unit"], "KiB");
+}

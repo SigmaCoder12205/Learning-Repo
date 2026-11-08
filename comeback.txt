@@ -5,3 +5,4 @@ THINGS TO MAYBE DO
 
 1. Talk about CSV'S and JSON'S my self in files.txt
 2. Continue on at input/output.txt and talk about stdin, stdout and stderr
+3. Make the calculator app just that tiny bit better

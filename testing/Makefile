@@ -9,6 +9,7 @@ install: build
 	install -Dm644 include/cppbench_telemetry.h "$(DESTDIR)$(PREFIX)/include/cppbench_telemetry.h"
 	install -Dm644 docs/profiles.md "$(DESTDIR)$(PREFIX)/share/doc/cppbench/profiles.md"
 	install -Dm644 docs/accounts.md "$(DESTDIR)$(PREFIX)/share/doc/cppbench/accounts.md"
+	install -Dm644 docs/memory.md "$(DESTDIR)$(PREFIX)/share/doc/cppbench/memory.md"
 
 test:
 	cargo test --locked
@@ -26,6 +27,7 @@ check: check-format lint
 
 check-c:
 	$(CC) -std=c11 -Wall -Wextra -Werror -fsyntax-only native/measure.c
+	$(CC) -std=c11 -Wall -Wextra -Werror -fsyntax-only native/helper.c native/launcher.c
 	$(CC) -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only include/cppbench_telemetry.h
 
 verify: check check-c test

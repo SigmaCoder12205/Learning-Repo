@@ -18,7 +18,7 @@ const LABELS: [&str; 15] = [
     "System CPU time",
     "Total CPU time",
     "CPU usage",
-    "Peak memory",
+    "Peak memory (RSS)",
     "Minor page faults",
     "Major page faults",
     "Filesystem reads",
@@ -168,7 +168,10 @@ pub fn render(
             }
             out.push('\n');
         }
-        out.push_str("Memory values are per-run peaks. CPU 100% = one core; filesystem I/O is counted in operations.\n");
+        out.push_str("Memory values are per-run RSS peaks. CPU 100% = one core; filesystem I/O is counted in operations.\n");
+    }
+    if good > 0 && visible.contains(&5) {
+        out.push_str("Memory: peak resident process memory (RSS), including runtime libraries and stack; not heap allocation or executable section size.\n");
     }
     if !custom_metrics {
         if let Some(engines) = report["gpu"]["target"]["engines_percent"]

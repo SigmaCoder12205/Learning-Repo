@@ -8,7 +8,9 @@ cppbench /path/to/your/program
 
 The default is one warmup followed by ten measured invocations. The overview shows average time, highest peak memory, average CPU usage, GPU availability, throughput, output sizes, and timing variation. Use `--intermediate` for resource ranges or `--advanced` for all 15 metrics, full statistics, and individual runs.
 
-Rust handles the CLI, statistics, correctness checks, and reports. C handles process launch, monotonic timing, Linux `wait4` resource accounting, deadlines, and process-group cleanup. The C code is linked into the native executable. **No Python interpreter, wrapper, or runtime is used.**
+Rust handles the CLI, statistics, correctness checks, and reports. A small, isolated C helper handles process launch, monotonic timing, Linux `wait4` resource accounting, deadlines, and process-group cleanup. Its executable is embedded in cppbench and run from a sealed Linux memory file, so installation still needs only the cppbench executable. **No Python interpreter, wrapper, or runtime is used.**
+
+Version **0.9** isolates target launches from the Rust process's resident memory. This prevents report/history allocations from inflating a child's peak RSS across `fork`/`exec`. Reports identify the measurement backend; regenerate saved baselines when upgrading from earlier versions. See [what memory measurements mean](docs/memory.md), including why GNU `size` and runtime RSS differ.
 
 Version 0.5 adds saved comparisons and regression gates, workload suites, CPU hotspots and flamegraphs, adaptive sampling, CPU affinity, target-PID Intel GPU metrics, offline HTML reports, and checkpoint recovery. See [the experiment guide](docs/experiments.md) for commands, configuration, and limitations.
 
@@ -311,6 +313,6 @@ make fmt
 make verify
 ```
 
-See [the development guide](docs/development.md) for the module map, execution flow, test commands, and instructions for adding profiles or diagnostic tools. The entrypoint delegates to separate CLI, application, benchmark, statistics, and storage modules. Each external tool owns its runner, parser, and parser tests under `src/diagnostics/`. Profile definitions, telemetry, networking, and presentation live under `src/profiles/`. The Rust/C measurement boundary remains in `src/runner.rs` and `native/measure.c`.
+See [the development guide](docs/development.md) for the module map, execution flow, test commands, and instructions for adding profiles or diagnostic tools. The entrypoint delegates to separate CLI, application, benchmark, statistics, and storage modules. Each external tool owns its runner, parser, and parser tests under `src/diagnostics/`. Profile definitions, telemetry, networking, and presentation live under `src/profiles/`. The measurement boundary spans `src/runner.rs`, `native/launcher.c`, `native/helper.c`, and `native/measure.c`.
 
-JSON uses `schema_version: 3`, with additive `gpu` and `diagnostics` objects. Metric names and successful-run aggregation remain consistent. Complete statistical columns are available in advanced text view and JSON. Diagnostic measurements are nested separately and never enter baseline aggregates.
+JSON uses `schema_version: 3`, with additive `gpu`, `diagnostics`, `measurement_backend`, and `memory_accounting` fields. Metric names and successful-run aggregation remain consistent. Complete statistical columns are available in advanced text view and JSON. Diagnostic measurements are nested separately and never enter baseline aggregates.

@@ -74,6 +74,9 @@ fn metric(report: &Value, name: &str) -> Option<f64> {
 fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, allow: bool) -> Value {
     let mut differences = Vec::<String>::new();
     let mut warnings = Vec::new();
+    if current["measurement_backend"] != baseline["measurement_backend"] {
+        differences.push("measurement backend differs; regenerate the baseline for comparable launch and RSS accounting".into());
+    }
     if current["profiles"]["flags"] != baseline["profiles"]["flags"] {
         differences.push("domain profile selection differs".into());
     }
@@ -252,6 +255,24 @@ mod tests {
         current["settings"]["work_units"] = json!(5);
         assert_eq!(
             single(&current, &report(1., 100.), &limits, false)["status"],
+            "incompatible"
+        );
+    }
+    #[test]
+    fn changed_measurement_backend_requires_a_new_baseline_or_explicit_override() {
+        let old = report(1., 100.);
+        let mut current = old.clone();
+        current["measurement_backend"] = json!(crate::runner::BACKEND);
+        assert_eq!(
+            single(&current, &old, &BTreeMap::new(), false)["status"],
+            "incompatible"
+        );
+        assert_ne!(
+            single(&current, &old, &BTreeMap::new(), true)["status"],
+            "incompatible"
+        );
+        assert_ne!(
+            single(&current, &current, &BTreeMap::new(), false)["status"],
             "incompatible"
         );
     }

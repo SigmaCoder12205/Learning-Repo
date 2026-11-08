@@ -140,7 +140,9 @@ pub(crate) fn execute(
         affinity: &affinity,
     };
     let mut report = json!({"schema_version":3,"tool_version":env!("CARGO_PKG_VERSION"),"name":name,
-        "implementation":"Rust CLI with C process measurement","command":display_command(&command),"provenance":provenance,
+        "implementation":"Rust CLI with isolated C process measurement", "measurement_backend":runner::BACKEND,
+        "memory_accounting":{"source":"Linux wait4 ru_maxrss","unit":"KiB","scope":"Peak resident memory over the target child lifetime, including C launch setup, runtime mappings and waited-for descendants; not simultaneous process-tree RSS, heap allocations or executable section size"},
+        "command":display_command(&command),"provenance":provenance,
         "host":{"system":std::env::consts::OS,"machine":std::env::consts::ARCH,"logical_cpus":std::thread::available_parallelism().map(|n|n.get()).ok()},
         "settings":{"runs":args.runs,"warmup":args.warmup,"timeout_seconds":args.timeout,"cwd":cwd,"work_units":args.units,
             "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":input,"expected_output":expected,

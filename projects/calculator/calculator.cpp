@@ -1,37 +1,86 @@
-// Turn the while loop into a function 
-// Then fix if the user enters less than 2 numbers in subtraction and other files 
+// Comeback and make the parsing function 
 
 #include <iostream>
 #include <vector>
 #include <string>
 #include <sstream>
 #include <limits>
-#include <type_traits>
 
 double add(const std::vector<double> &nums);
 double subtract(const std::vector<double> &nums);
 double multiple(const std::vector<double> &nums);
 double divide(const std::vector<double> &numbers);
+std::vector<double> numbers_loop();
+char operation_loop();
+double parsing(const char &operation, const std::vector<double> &nums);
 
 int main(){
     char operation;
-    bool running = true;
-    bool redo = false;
     std::string temp;
     std::vector<double> numbers;
+
+    operation = operation_loop();
+
+    numbers = numbers_loop();
+
+    std::cout << "Answer: " << parsing(operation, numbers) << std::endl;
+
+    return 0;
+}
+
+double parsing(const char &operation, const std::vector<double> &nums){
+    double output = 0.0;
+    
+    switch (operation){
+        case '+': 
+            output = add(nums);
+        break;
+
+        case '-':
+            output = subtract(nums);
+        break;
+
+        case '*':
+            output = multiple(nums);
+        break;
+    
+        case '/':
+            output = divide(nums);
+        break;
+    }
+    return output;
+}
+
+char operation_loop(){
+    char operation;
 
     std::cout << "Enter your operation: ";
     std::cin >> operation;
 
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    while(running){
+    return operation;
+
+}
+
+std::vector<double> numbers_loop(){
+    std::string temp;
+    std::vector<double> numbers;
+    
+    while(true){
         std::cout << "Enter the number (q to quit): ";
 
         std::getline(std::cin, temp);
 
         if(temp == "q" || temp == "Q"){
-            break;
+            if(numbers.size() < 2){
+                std::cout << "Must enter at least 2 numbers" << std::endl;
+                continue;
+            }
+            else{
+                break;
+            }
+            
         }
 
         std::stringstream ss(temp);
@@ -47,42 +96,7 @@ int main(){
         }
     }
 
-    switch (operation){
-    case '+': 
-        std::cout << add(numbers) << std::endl;
-    break;
-
-    case '-':
-
-        if(numbers.size() < 2){
-            std::cout << "Must enter more than 2 numbers" << std::endl;
-            redo = true;
-            break;
-        }
-        else{
-            std::cout << subtract(numbers) << std::endl;
-            break;
-        }
-
-    case '*':
-        std::cout << multiple(numbers) << std::endl;
-    break;
-    
-    case '/':
-        if(numbers.size() < 2){
-            std::cout << "Must enter more than 2 numbers" << std::endl;
-            break;
-        }
-        else{
-            std::cout << divide(numbers) << std::endl;
-            break;
-        }
-
-    default:
-        break;
-    }
-
-    return 0;
+    return numbers;
 }
 
 double add(const std::vector<double> &nums){

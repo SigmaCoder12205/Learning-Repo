@@ -14,9 +14,15 @@ struct measurement {
 /* Synchronous, single-threaded API. argv/envp must be NULL terminated.
  * All files and strings remain owned by the caller. Returns errno on failure.
  * Installs/restores temporary signal handlers and a SIGCHLD mask. */
-int cppbench_measure(const char *executable, char *const argv[], char *const envp[],
+int cppbench_measure_target(const char *executable, char *const argv[], char *const envp[],
                      const char *cwd, int input, int output, int error,
                      double timeout, double output_limit, double units,
                      const unsigned *cpus, size_t cpu_count,
                      struct measurement *result);
+struct measurement_reply {
+    int error;
+    struct measurement measurement;
+};
+int cppbench_measure(int helper, int request, int reply, int input, int output,
+                     int error, struct measurement *result);
 #endif

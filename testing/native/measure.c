@@ -6,6 +6,7 @@
 #include <sched.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <sys/prctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -36,7 +37,7 @@ static void child_failure(int fd) {
     _exit(127);
 }
 
-int cppbench_measure(const char *executable, char *const argv[], char *const envp[],
+int cppbench_measure_target(const char *executable, char *const argv[], char *const envp[],
                      const char *cwd, int input, int output, int error,
                      double timeout, double output_limit, double units,
                      const unsigned *cpus, size_t cpu_count,
@@ -74,10 +75,18 @@ int cppbench_measure(const char *executable, char *const argv[], char *const env
         sigprocmask(SIG_SETMASK, &oldmask, NULL);
         close(launch[0]); close(launch[1]); return saved;
     }
+    /* The launcher blocks these across exec to preserve early cancellation. */
+    sigdelset(&oldmask, SIGINT);
+    sigdelset(&oldmask, SIGTERM);
+    sigset_t runmask = oldmask;
+    sigaddset(&runmask, SIGCHLD);
+    sigprocmask(SIG_SETMASK, &runmask, NULL);
     double start = now();
+    pid_t parent = getpid();
     pid_t pid = fork();
     int saved = pid < 0 ? errno : 0;
     if (pid == 0) {
+        if (prctl(PR_SET_PDEATHSIG, SIGKILL) < 0 || getppid() != parent) _exit(127);
         close(launch[0]);
         sigaction(SIGINT, &oldint, NULL);
         sigaction(SIGTERM, &oldterm, NULL);
@@ -90,6 +99,9 @@ int cppbench_measure(const char *executable, char *const argv[], char *const env
         if (setsid() < 0 || chdir(cwd) < 0 ||
             dup2(input, STDIN_FILENO) < 0 || dup2(output, STDOUT_FILENO) < 0 ||
             dup2(error, STDERR_FILENO) < 0) child_failure(launch[1]);
+        /* dup2(fd, fd) does not clear CLOEXEC when standard descriptors were closed. */
+        if (fcntl(STDIN_FILENO, F_SETFD, 0) < 0 || fcntl(STDOUT_FILENO, F_SETFD, 0) < 0 ||
+            fcntl(STDERR_FILENO, F_SETFD, 0) < 0) child_failure(launch[1]);
         execve(executable, argv, envp);
         child_failure(launch[1]);
     }

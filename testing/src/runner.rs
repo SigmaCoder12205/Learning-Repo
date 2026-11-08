@@ -3,10 +3,10 @@ use std::{
     collections::BTreeMap,
     ffi::{CString, OsStr, OsString},
     fs::File,
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek, SeekFrom, Write},
     os::{
-        fd::AsRawFd,
-        raw::{c_char, c_int},
+        fd::{AsRawFd, FromRawFd},
+        raw::c_int,
         unix::ffi::OsStrExt,
     },
     path::Path,
@@ -23,18 +23,12 @@ struct Measurement {
 }
 extern "C" {
     fn cppbench_measure(
-        executable: *const c_char,
-        argv: *const *const c_char,
-        envp: *const *const c_char,
-        cwd: *const c_char,
+        helper: c_int,
+        request: c_int,
+        reply: c_int,
         input: c_int,
         output: c_int,
         error: c_int,
-        timeout: f64,
-        output_limit: f64,
-        units: f64,
-        cpus: *const u32,
-        cpu_count: usize,
         result: *mut Measurement,
     ) -> c_int;
 }
@@ -49,6 +43,40 @@ pub struct RunOptions<'a> {
     pub output_limit: f64,
     pub units: f64,
     pub affinity: &'a [u32],
+}
+
+/// Versioned measurement provenance; old fork-from-Rust baselines are incompatible.
+pub(crate) const BACKEND: &str = "isolated-c-wait4-v1";
+
+fn memory_file(name: &std::ffi::CStr, executable: bool) -> std::io::Result<File> {
+    let flags = libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING;
+    // MFD_EXEC is supported from Linux 6.3; older kernels allow executable memfds by default.
+    // SAFETY: name is NUL-terminated, and we take ownership of a successful returned descriptor.
+    let mut fd =
+        unsafe { libc::memfd_create(name.as_ptr(), flags | if executable { 0x0010 } else { 0 }) };
+    if fd < 0 && executable && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINVAL)
+    {
+        fd = unsafe { libc::memfd_create(name.as_ptr(), flags) };
+    }
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+fn seal(file: &File) -> std::io::Result<()> {
+    // SAFETY: the descriptor is live and F_ADD_SEALS takes an integer bitmask.
+    let rc = unsafe {
+        libc::fcntl(
+            file.as_raw_fd(),
+            libc::F_ADD_SEALS,
+            libc::F_SEAL_WRITE | libc::F_SEAL_GROW | libc::F_SEAL_SHRINK | libc::F_SEAL_SEAL,
+        )
+    };
+    if rc < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 fn cstring(value: &OsStr) -> Result<CString, String> {
@@ -94,8 +122,6 @@ pub fn run_logged(
             .iter()
             .map(|a| cstring(a))
             .collect::<Result<Vec<_>, _>>()?;
-        let mut argv_ptrs: Vec<_> = argv.iter().map(|a| a.as_ptr()).collect();
-        argv_ptrs.push(std::ptr::null());
         let env = opts
             .env
             .iter()
@@ -106,8 +132,6 @@ pub fn run_logged(
                 cstring(&pair)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let mut env_ptrs: Vec<_> = env.iter().map(|v| v.as_ptr()).collect();
-        env_ptrs.push(std::ptr::null());
         let cwd = cstring(opts.cwd.as_os_str())?;
         let input = File::open(opts.input.unwrap_or(Path::new("/dev/null")))?;
         let capture = |path: &Path| {
@@ -122,24 +146,50 @@ pub fn run_logged(
         } else {
             (tempfile::tempfile()?, tempfile::tempfile()?)
         };
+        if argv.is_empty() {
+            return Err("empty target command".into());
+        }
+        let mut config = Vec::new();
+        config.extend_from_slice(&1u32.to_le_bytes());
+        for value in [opts.timeout, opts.output_limit, opts.units] {
+            config.extend_from_slice(&value.to_le_bytes());
+        }
+        for count in [argv.len(), env.len(), opts.affinity.len()] {
+            config.extend_from_slice(&u32::try_from(count)?.to_le_bytes());
+        }
+        for cpu in opts.affinity {
+            config.extend_from_slice(&cpu.to_le_bytes());
+        }
+        for value in std::iter::once(&cwd).chain(argv.iter()).chain(env.iter()) {
+            let bytes = value.as_bytes_with_nul();
+            config.extend_from_slice(&u32::try_from(bytes.len())?.to_le_bytes());
+            config.extend_from_slice(bytes);
+        }
+        if config.len() > 16 * 1024 * 1024 {
+            return Err("measurement request exceeds 16 MiB".into());
+        }
+        let mut helper = memory_file(c"cppbench-measure", true)?;
+        helper.write_all(include_bytes!(concat!(
+            env!("OUT_DIR"),
+            "/cppbench-measure"
+        )))?;
+        seal(&helper)?;
+        let mut request = memory_file(c"cppbench-request", false)?;
+        request.write_all(&config)?;
+        seal(&request)?;
+        let reply = memory_file(c"cppbench-result", false)?;
         let mut measured = Measurement::default();
-        // SAFETY: all C strings, NULL-terminated pointer arrays, file descriptors, and
-        // result storage live until the synchronous C call returns. This CLI invokes
-        // the process-wide signal API only from its single main thread.
+        // SAFETY: owned descriptors and result storage outlive this synchronous C call.
+        // The launcher installs process-wide handlers only on the single main thread.
+        // Target argv/environment are serialized, not accessed across exec through pointers.
         let errno = unsafe {
             cppbench_measure(
-                argv[0].as_ptr(),
-                argv_ptrs.as_ptr(),
-                env_ptrs.as_ptr(),
-                cwd.as_ptr(),
+                helper.as_raw_fd(),
+                request.as_raw_fd(),
+                reply.as_raw_fd(),
                 input.as_raw_fd(),
                 output.as_raw_fd(),
                 error.as_raw_fd(),
-                opts.timeout,
-                opts.output_limit,
-                opts.units,
-                opts.affinity.as_ptr(),
-                opts.affinity.len(),
                 &mut measured,
             )
         };
@@ -205,4 +255,41 @@ pub(crate) fn display_command(command: &[OsString]) -> Vec<String> {
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn target_peak_is_independent_of_rust_parent_resident_memory() {
+        let env = BTreeMap::new();
+        let opts = RunOptions {
+            cwd: Path::new("/"),
+            env: &env,
+            input: None,
+            expected: None,
+            expected_exit: 0,
+            timeout: 5.,
+            output_limit: 1024.,
+            units: 1.,
+            affinity: &[],
+        };
+        let command = [OsString::from("/bin/true")];
+        let before = run(&command, &opts, &[5]).unwrap();
+        assert_eq!(before["status"], "ok");
+        let mut resident = vec![0u8; 64 * 1024 * 1024];
+        for byte in resident.iter_mut().step_by(4096) {
+            *byte = 1;
+        }
+        std::hint::black_box(&resident);
+        let after = run(&command, &opts, &[5]).unwrap();
+        assert_eq!(after["status"], "ok");
+        let before_rss = before["metrics"]["rss"].as_f64().unwrap();
+        let after_rss = after["metrics"]["rss"].as_f64().unwrap();
+        assert!(
+            after_rss < before_rss + 8. * 1024.,
+            "parent memory leaked into target RSS: before={before_rss}, after={after_rss}"
+        );
+        std::hint::black_box(resident);
+    }
 }

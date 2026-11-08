@@ -23,7 +23,7 @@ cargo test --locked diagnostics::gpu
 cargo run --locked -- /bin/true --runs 2 --warmup 0
 ```
 
-`make install` installs the release binary, telemetry header, and profile/account guides under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
+`make install` installs the release binary, telemetry header, and profile/account/memory guides under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
 
 Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnostic sessions live in `cppbench-artifacts/` and are ignored at any directory depth, including suite-relative artifact directories. These directories can contain useful benchmark evidence; the development commands do not delete them. `.editorconfig` defines basic whitespace conventions; `cargo fmt` is authoritative for Rust formatting.
 
@@ -35,8 +35,10 @@ Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnos
 | `src/cli.rs` | Shared CLI option definitions and value parsing |
 | `src/app.rs` | Mode selection, output destinations, comparisons, and final output |
 | `src/benchmark.rs` | Compile-once support, warmups, measured invocations, adaptive stopping, and diagnostic handoff |
-| `src/runner.rs` | C FFI ownership, input/output capture, and per-invocation correctness checks |
-| `native/measure.c`, `native/measure.h` | Process launch, resource accounting, deadlines, affinity, signals, and cleanup |
+| `src/runner.rs` | Embedded helper, sealed request transport, C FFI ownership, output capture, and correctness checks |
+| `native/launcher.c` | Fresh C helper launch, signal forwarding, and result transport (its own resource usage is discarded) |
+| `native/helper.c` | Bounded versioned request decoding in a clean C address space |
+| `native/measure.c`, `native/measure.h` | Target launch, wait4 accounting, deadlines, affinity, signals, and cleanup |
 | `src/metrics.rs` | Baseline metric IDs, units, and selection groups |
 | `src/stats.rs` | Percentiles, descriptive summaries, bootstrap intervals, and precision estimates |
 | `src/experiment.rs` | Settings validation, provenance, and successful-run aggregation |
@@ -61,7 +63,7 @@ Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnos
 
 1. The application parses options, validates mode restrictions and destinations, and loads any comparison baseline.
 2. A single experiment resolves or compiles its target. Suites validate their entries first, then use the same experiment implementation for each case.
-3. The runner calls C synchronously. Rust owns every string, descriptor, and result buffer until the call returns. The C signal handling is process-wide; do not parallelize target invocations inside this process without redesigning that boundary.
+3. The runner serializes a versioned request (little-endian scalar fields and length-prefixed NUL-terminated byte strings), seals it in a memfd, and launches the embedded C helper through the C FFI. The helper decodes it and supervises a fresh target child. Only that child's usage is reported; helper startup/transport are outside measured time. Rust owns descriptors and result storage until the synchronous call returns. C signal handling is process-wide; do not parallelize target invocations inside this process without redesigning that boundary.
 4. Warmups and measured runs receive correctness checks. Only successful measured runs enter baseline summaries. Journaling happens outside measured execution time.
 5. Optional tools and telemetry execute as separate replays. They retain their own artifacts and never enter baseline timing/resource aggregates.
 6. The application compares results, completes the journal, and renders the requested format. Recovery reads completed records without running the target again.
@@ -100,3 +102,7 @@ For structural changes, preserve CLI help, the profile catalog, serialized field
 Keycloak owns all account/password logic; keep the Rust account module a protocol client. `auth/compose.yaml` supplies the local Keycloak/PostgreSQL services, and `auth/realm.json` seeds configuration. No password grants or admin credentials belong in the CLI. The client uses userinfo from the configured issuer rather than trusting decoded JWT claims. Offline refresh credentials are bound to that issuer and saved under private filesystem permissions. All benchmark paths stay independent of the account service.
 
 `auth/tests/smoke.py --restart` is an optional real-service check (Python standard library only, development tooling). It creates and cleans up a unique test account. Run it after `cargo build` and `./auth/scripts/setup.sh`. The service guide explains persistence, bootstrap secrets, session policy, and live-realm changes.
+
+## Measurement helper
+
+`build.rs` compiles the target-platform helper executable and embeds its bytes through `include_bytes!`. It also links the small launcher FFI library. `native/measure.h` defines both the Rust-facing result layout and the helper reply. Keep protocol encoding in `runner.rs` and decoding in `helper.c` in agreement, incrementing the request version if its layout changes. The helper executes with a clean environment; the original target environment travels in the sealed request, not in argv. Preserve early INT/TERM handling across exec, propagation to the target, and cleanup/reaping. See [memory accounting](memory.md) for the residual C pre-exec footprint and waited-child scope. Changing this backend requires a new measurement provenance identifier and compatibility checks.

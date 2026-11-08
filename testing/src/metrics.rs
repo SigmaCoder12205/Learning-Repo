@@ -9,7 +9,7 @@ pub const METRICS: [(&str, &str, &str); 15] = [
     ("system", "s", "Kernel-mode CPU time"),
     ("cpu", "s", "Total user + system CPU time"),
     ("cpu_percent", "%", "CPU / wall time; can exceed 100%"),
-    ("rss", "KiB", "Linux peak resident memory"),
+    ("rss", "KiB", "Linux wait4 peak resident process memory, including runtime libraries; not heap or executable size"),
     ("minor_faults", "count", "Page faults without disk I/O"),
     ("major_faults", "count", "Page faults requiring disk I/O"),
     (
