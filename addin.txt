@@ -72,3 +72,9 @@ how to check a type of variable in C++
 std::is_same_v<decltype(var), target_type>
 
 requires the #include <type_traits> header
+
+------------------------------------------------------------------------------------------------------------------------------------------
+
+how to compile C++ the best way 
+
+g++ -std=c++20 -Wall -Wextra -O2 main.cpp -o program
