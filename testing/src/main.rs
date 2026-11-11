@@ -10,6 +10,7 @@ mod hotspots;
 mod html;
 mod metrics;
 mod profiles;
+mod python;
 mod report;
 mod runner;
 mod stats;
@@ -20,7 +21,7 @@ fn main() {
     let code = match app::run() {
         Ok(code) => code,
         Err(error) => {
-            eprintln!("cppbench: {error}");
+            eprintln!("bench: {error}");
             2
         }
     };

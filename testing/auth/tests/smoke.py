@@ -51,18 +51,18 @@ def request(url, fields=None, bearer=None, method=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--binary', type=Path, default=ROOT / 'target/debug/cppbench')
+    parser.add_argument('--binary', type=Path, default=ROOT / 'target/debug/bench')
     parser.add_argument('--restart', action='store_true')
     args = parser.parse_args()
     config = dict(line.split('=', 1) for line in (ROOT / 'auth/.env').read_text().splitlines() if '=' in line)
     admin = request(BASE + '/realms/master/protocol/openid-connect/token', {
         'client_id': 'admin-cli', 'grant_type': 'password', 'username': 'admin',
         'password': config['KEYCLOAK_ADMIN_PASSWORD']})['access_token']
-    username = 'cppbench-smoke-' + secrets.token_hex(6)
+    username = 'bench-smoke-' + secrets.token_hex(6)
     password = secrets.token_urlsafe(24)
     user_id = None
     try:
-        with tempfile.TemporaryDirectory(prefix='cppbench-keycloak-test-') as cache:
+        with tempfile.TemporaryDirectory(prefix='bench-keycloak-test-') as cache:
             def cli(*argv, expected=0):
                 output = subprocess.run([str(args.binary), 'account', '--data-dir', cache, '--json', *argv], capture_output=True, text=True, timeout=20)
                 assert output.returncode == expected, f'Unexpected exit for {argv[0]}: {output.returncode}; {output.stderr}'

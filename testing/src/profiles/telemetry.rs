@@ -112,6 +112,12 @@ pub(crate) fn run(
 ) -> Result<Value, String> {
     let path = dir.join("profile-telemetry.json");
     let mut env = opts.env.clone();
+    env.insert("BENCH_TELEMETRY_FILE".into(), path.clone().into_os_string());
+    env.insert(
+        "BENCH_PROFILE_FLAGS".into(),
+        args.profile_flags.join(",").into(),
+    );
+    // Keep already-built instrumentation working across the CLI rename.
     env.insert(
         "CPPBENCH_TELEMETRY_FILE".into(),
         path.clone().into_os_string(),
@@ -127,7 +133,7 @@ pub(crate) fn run(
     }
     if !path.exists() {
         return Ok(
-            json!({"status":"unavailable","reason":"target did not write CPPBENCH_TELEMETRY_FILE; application metrics need instrumentation or a test driver","invocation":row}),
+            json!({"status":"unavailable","reason":"target did not write BENCH_TELEMETRY_FILE; application metrics need instrumentation or a test driver","invocation":row}),
         );
     }
     if !std::fs::symlink_metadata(&path)

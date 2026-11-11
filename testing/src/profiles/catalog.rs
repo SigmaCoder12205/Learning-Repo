@@ -414,7 +414,7 @@ pub const PROFILES: &[Profile] = &[
                 flag: "load-testing",
                 title: "Load tests",
                 guidance: concat!(
-                    "Use an external load driver with controlled arrivals. cppbench ",
+                    "Use an external load driver with controlled arrivals. bench ",
                     "does not generate HTTP load or correct coordinated omission.",
                 ),
                 metrics: &[

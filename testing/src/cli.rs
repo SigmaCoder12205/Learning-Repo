@@ -15,21 +15,30 @@ fn positive(s: &str) -> Result<f64, String> {
     version,
     args_conflicts_with_subcommands = true,
     subcommand_negates_reqs = true,
-    about = "Native Rust/C process benchmarks for Linux",
-    after_help = "Examples:\n  cppbench ./build/program\n  cppbench ./program --runs 30 --metrics timing,memory -- --size 1000\n  cppbench --source main.cpp --cxxflag=-march=native"
+    about = "Native executable and Python process benchmarks for Linux",
+    after_help = "Examples:\n  bench workload.py --intermediate\n  bench workload.py --interpreter .venv/bin/python -- --size 1000\n  bench ./build/program\n  bench ./program --runs 30 --metrics timing,memory -- --size 1000\n  bench --source main.cpp --cxxflag=-march=native"
 )]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Option<crate::accounts::Command>,
-    /// Executable path to benchmark
-    #[arg(conflicts_with_all = ["executable", "source"])]
+    /// Executable or Python .py script to benchmark
+    #[arg(conflicts_with_all = ["executable", "source", "python"])]
     pub(crate) program: Option<PathBuf>,
     /// Existing executable (alternative to positional path)
-    #[arg(long, conflicts_with = "source")]
+    #[arg(long, conflicts_with_all = ["source", "python", "interpreter", "python_arg"])]
     pub(crate) executable: Option<PathBuf>,
     /// C++ translation units to compile once
-    #[arg(long, num_args = 1..)]
+    #[arg(long, num_args = 1.., conflicts_with_all = ["python", "interpreter", "python_arg"])]
     pub(crate) source: Vec<PathBuf>,
+    /// Run a Python script, including scripts without a .py extension
+    #[arg(long, value_name = "SCRIPT")]
+    pub(crate) python: Option<PathBuf>,
+    /// Python interpreter name or path (default: python3 from PATH; preserves virtual environments)
+    #[arg(long, value_name = "PATH")]
+    pub(crate) interpreter: Option<PathBuf>,
+    /// Repeatable interpreter option before the script, e.g. --python-arg=-O
+    #[arg(long, allow_hyphen_values = true, value_name = "OPTION")]
+    pub(crate) python_arg: Vec<OsString>,
     #[arg(long, default_value = "g++")]
     pub(crate) compiler: PathBuf,
     #[arg(long = "std", default_value = "c++17")]
@@ -105,7 +114,7 @@ pub(crate) struct Cli {
     #[arg(long, default_value = "120", value_parser = positive)]
     pub(crate) diagnostic_timeout: f64,
     /// Parent directory for retained diagnostic artifacts
-    #[arg(long, default_value = "cppbench-artifacts")]
+    #[arg(long, default_value = "bench-artifacts")]
     pub(crate) artifacts_dir: PathBuf,
     /// Comma-separated perf stat events
     #[arg(
@@ -120,7 +129,7 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) gpu_device: Option<String>,
     /// Run named benchmarks from a JSON suite
-    #[arg(long, conflicts_with_all = ["program", "executable", "source", "recover", "check_tools"])]
+    #[arg(long, conflicts_with_all = ["program", "executable", "source", "python", "interpreter", "python_arg", "recover", "check_tools"])]
     pub(crate) suite: Option<PathBuf>,
     /// Name stored with this experiment
     #[arg(long)]
@@ -159,10 +168,10 @@ pub(crate) struct Cli {
     #[arg(long, conflicts_with = "recover")]
     pub(crate) checkpoint: Option<PathBuf>,
     /// Recover a report from a JSONL journal without executing the target
-    #[arg(long, conflicts_with_all = ["program", "executable", "source", "suite", "check_tools"])]
+    #[arg(long, conflicts_with_all = ["program", "executable", "source", "python", "suite", "check_tools"])]
     pub(crate) recover: Option<PathBuf>,
     /// Check installed optional tools and counter access without a target
-    #[arg(long, conflicts_with_all = ["program", "executable", "source", "suite", "recover"])]
+    #[arg(long, conflicts_with_all = ["program", "executable", "source", "python", "suite", "recover"])]
     pub(crate) check_tools: bool,
     /// Extra CPU sampling pass with function hotspots and a flamegraph
     #[arg(long)]

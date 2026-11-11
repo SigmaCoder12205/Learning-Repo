@@ -19,7 +19,7 @@ pub(crate) struct Options {
     /// Private CLI session directory (absolute path); contains no account database
     #[arg(long, global = true)]
     data_dir: Option<PathBuf>,
-    /// Keycloak realm URL; defaults to the local cppbench service
+    /// Keycloak realm URL; defaults to the local bench service
     #[arg(long, global = true)]
     issuer: Option<String>,
     /// Machine-readable results (browser instructions and errors go to stderr)
@@ -81,7 +81,7 @@ fn signed_out(json_output: bool) -> Result<i32, String> {
     emit(
         json_output,
         json!({"authenticated": false, "account": null}),
-        "Not signed in. Run cppbench account login.",
+        "Not signed in. Run bench account login.",
         1,
     )
 }
@@ -107,7 +107,7 @@ pub(crate) fn run(options: Options) -> Result<i32, String> {
             let store = Store::open(dir.clone())?;
             let provider = saved_provider(&store, options.issuer.as_deref())?;
             if store.state.session.is_some() {
-                return Err("a CLI login is already saved; run cppbench account logout before switching accounts".into());
+                return Err("a CLI login is already saved; run bench account logout before switching accounts".into());
             }
             let revision = store.state.revision;
             drop(store); // Never keep a file lock while waiting for a human in the browser.
@@ -155,7 +155,7 @@ pub(crate) fn run(options: Options) -> Result<i32, String> {
                 json_output,
                 json!({"authenticated": true, "account": account, "persistent_login": true}),
                 &format!(
-                    "Signed in as {}. CLI login saved; use cppbench account logout to sign out.",
+                    "Signed in as {}. CLI login saved; use bench account logout to sign out.",
                     account["username"].as_str().unwrap()
                 ),
                 0,

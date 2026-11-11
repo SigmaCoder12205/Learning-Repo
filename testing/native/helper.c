@@ -63,7 +63,7 @@ static int run(int request, int input, int output, int error, struct measurement
     for (uint32_t i = 0; i < argc && !r.error; i++) argv[i] = string(&r);
     for (uint32_t i = 0; i < envc && !r.error; i++) envp[i] = string(&r);
     int saved = r.error || r.p != r.end ? EINVAL :
-        cppbench_measure_target(argv[0], argv, envp, cwd, input, output, error,
+        bench_measure_target(argv[0], argv, envp, cwd, input, output, error,
                                 timeout, limit, units, cpus, cpu_count, result);
     free(argv); free(envp); free(data);
     return saved;

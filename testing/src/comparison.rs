@@ -9,7 +9,7 @@ pub fn load(path: &Path) -> Result<Value, String> {
     let value: Value =
         serde_json::from_slice(&data).map_err(|e| format!("invalid baseline: {e}"))?;
     if !value["summary"].is_object() && !value["cases"].is_array() {
-        return Err("baseline is not a cppbench report".into());
+        return Err("baseline is not a bench report".into());
     }
     Ok(value)
 }
@@ -74,6 +74,19 @@ fn metric(report: &Value, name: &str) -> Option<f64> {
 fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, allow: bool) -> Value {
     let mut differences = Vec::<String>::new();
     let mut warnings = Vec::new();
+    if current["python"].is_object() != baseline["python"].is_object() {
+        differences.push("target type differs (Python versus native executable)".into());
+    } else if current["python"].is_object() {
+        if current["python"]["interpreter"] != baseline["python"]["interpreter"]
+            || current["provenance"]["executable_sha256"]
+                != baseline["provenance"]["executable_sha256"]
+        {
+            differences.push("Python interpreter differs".into());
+        }
+        if current["provenance"]["script_sha256"] != baseline["provenance"]["script_sha256"] {
+            warnings.push("Python script contents changed; comparison includes that code change");
+        }
+    }
     if current["measurement_backend"] != baseline["measurement_backend"] {
         differences.push("measurement backend differs; regenerate the baseline for comparable launch and RSS accounting".into());
     }

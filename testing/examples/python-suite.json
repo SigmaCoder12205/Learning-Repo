@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "defaults": {"runs": 10, "warmup": 1},
+  "benchmarks": [
+    {"name": "python-small", "python": "workload.py", "args": ["--size", "10000"], "units": 10000},
+    {"name": "python-large", "python": "workload.py", "args": ["--size", "100000"], "units": 100000}
+  ]
+}

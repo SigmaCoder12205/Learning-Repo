@@ -6,7 +6,7 @@ use std::{
 };
 
 fn bench(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    Command::new(env!("CARGO_BIN_EXE_bench"))
         .args(args)
         .output()
         .unwrap()

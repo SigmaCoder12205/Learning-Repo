@@ -84,7 +84,7 @@ pub fn execute(
             results.insert((*name).into(), issue("skipped", "interrupted"));
             continue;
         }
-        eprintln!("cppbench: running {name} diagnostic (separate from baseline)");
+        eprintln!("bench: running {name} diagnostic (separate from baseline)");
         let result = match *name {
             "perf" => perf::run(args, target, &opts, &dir),
             "gpu" => gpu::run(args, target, &opts, &dir),

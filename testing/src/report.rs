@@ -108,13 +108,22 @@ pub fn render(
     };
     let _ = writeln!(
         out,
-        "cppbench {} | {}/{} measured runs passed ({} requested)",
+        "bench {} | {}/{} measured runs passed ({} requested)",
         env!("CARGO_PKG_VERSION"),
         report["successful_runs"],
         runs.len(),
         report["settings"]["runs"]
     );
-    let _ = writeln!(out, "Target: {}", report["command"][0]);
+    if report["python"].is_object() {
+        let _ = writeln!(
+            out,
+            "Target: {} (Python)\nInterpreter: {}",
+            report["python"]["script"], report["python"]["interpreter"]
+        );
+        out.push_str("Python measurements include interpreter startup, imports, script execution, and shutdown.\n");
+    } else {
+        let _ = writeln!(out, "Target: {}", report["command"][0]);
+    }
     if report["completed"] == false {
         out.push_str("Partial experiment: only completed invocations are included.\n");
     }

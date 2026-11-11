@@ -22,7 +22,7 @@ struct Measurement {
     interrupt_signal: c_int,
 }
 extern "C" {
-    fn cppbench_measure(
+    fn bench_measure(
         helper: c_int,
         request: c_int,
         reply: c_int,
@@ -168,22 +168,19 @@ pub fn run_logged(
         if config.len() > 16 * 1024 * 1024 {
             return Err("measurement request exceeds 16 MiB".into());
         }
-        let mut helper = memory_file(c"cppbench-measure", true)?;
-        helper.write_all(include_bytes!(concat!(
-            env!("OUT_DIR"),
-            "/cppbench-measure"
-        )))?;
+        let mut helper = memory_file(c"bench-measure", true)?;
+        helper.write_all(include_bytes!(concat!(env!("OUT_DIR"), "/bench-measure")))?;
         seal(&helper)?;
-        let mut request = memory_file(c"cppbench-request", false)?;
+        let mut request = memory_file(c"bench-request", false)?;
         request.write_all(&config)?;
         seal(&request)?;
-        let reply = memory_file(c"cppbench-result", false)?;
+        let reply = memory_file(c"bench-result", false)?;
         let mut measured = Measurement::default();
         // SAFETY: owned descriptors and result storage outlive this synchronous C call.
         // The launcher installs process-wide handlers only on the single main thread.
         // Target argv/environment are serialized, not accessed across exec through pointers.
         let errno = unsafe {
-            cppbench_measure(
+            bench_measure(
                 helper.as_raw_fd(),
                 request.as_raw_fd(),
                 reply.as_raw_fd(),

@@ -64,8 +64,8 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
         values.entry("cwd").or_insert(json!(root));
         values
             .entry("artifacts_dir")
-            .or_insert(json!(root.join("cppbench-artifacts")));
-        let mut argv: Vec<OsString> = vec!["cppbench".into()];
+            .or_insert(json!(root.join("bench-artifacts")));
+        let mut argv: Vec<OsString> = vec!["bench".into()];
         let mut target_args = Vec::new();
         for (key, value) in values {
             let flag = format!("--{}", key.replace('_', "-"));
@@ -101,7 +101,30 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                         );
                     }
                 }
-                "executable" | "cwd" | "input" | "expect_output" | "artifacts_dir" => {
+                "python_args" => {
+                    for value in value.as_array().ok_or("python_args must be an array")? {
+                        argv.push(
+                            format!(
+                                "--python-arg={}",
+                                value.as_str().ok_or("python_args must contain strings")?
+                            )
+                            .into(),
+                        );
+                    }
+                }
+                "interpreter" => {
+                    let path = PathBuf::from(value.as_str().ok_or("interpreter must be a string")?);
+                    argv.push(flag.into());
+                    argv.push(
+                        if !path.is_absolute() && path.components().count() > 1 {
+                            root.join(path)
+                        } else {
+                            path
+                        }
+                        .into_os_string(),
+                    );
+                }
+                "executable" | "python" | "cwd" | "input" | "expect_output" | "artifacts_dir" => {
                     let p = PathBuf::from(value.as_str().ok_or("paths must be strings")?);
                     let p = if p.is_absolute() { p } else { root.join(p) };
                     argv.push(flag.into());
@@ -152,10 +175,12 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
         let mut args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
         args.profile_flags = crate::profiles::selection(&matches);
         experiment::validate(&args)?;
+        crate::python::prepare(&args, &crate::python::environment(&args)?)?;
         let binary = args
             .executable
             .as_deref()
-            .ok_or("suite benchmarks require executable")?;
+            .or(args.python.as_deref())
+            .ok_or("suite benchmarks require executable or python")?;
         if !binary.is_file() {
             return Err(format!(
                 "benchmark {name}: executable missing: {}",
@@ -187,7 +212,7 @@ pub fn execute(args: &Cli, journal: &mut Journal) -> Result<Value, String> {
         plan.progress = args.progress;
         if args.progress {
             eprintln!(
-                "cppbench: suite case {}: {}",
+                "bench: suite case {}: {}",
                 index + 1,
                 plan.name.as_deref().unwrap()
             );
@@ -247,7 +272,7 @@ pub fn render(report: &Value, format: &str, view: crate::report::View) -> String
     }
     let _ = writeln!(
         out,
-        "cppbench suite | {} cases | completed: {}",
+        "bench suite | {} cases | completed: {}",
         report["cases"].as_array().unwrap().len(),
         report["completed"]
     );

@@ -1,6 +1,6 @@
-# Working on cppbench
+# Working on bench
 
-cppbench is a Linux command-line executable built from Rust and a small C measurement layer. Build requirements are Rust/Cargo, a C compiler, and a linker. The integration tests also need `g++` and standard Linux shell utilities. Tool-format tests use fixtures and fake launchers; the normal test suite does not require GPU hardware, elevated permissions, or installed profilers.
+bench is a Linux command-line executable built from Rust and a small C measurement layer. Build requirements are Rust/Cargo, a C compiler, and a linker. The integration tests also need `g++`, `python3` with the standard-library `venv` module, and standard Linux shell utilities. Tool-format tests use fixtures and fake launchers; the normal test suite does not require GPU hardware, elevated permissions, or installed profilers.
 
 ## Local workflow
 
@@ -9,7 +9,7 @@ Run commands from this directory:
 ```bash
 make fmt       # Format Rust sources
 make verify    # Formatting, Clippy, C/header checks, and all tests
-make build     # Optimized executable at target/release/cppbench
+make build     # Optimized executable at target/release/bench
 ```
 
 For narrower checks:
@@ -23,9 +23,9 @@ cargo test --locked diagnostics::gpu
 cargo run --locked -- /bin/true --runs 2 --warmup 0
 ```
 
-`make install` installs the release binary, telemetry header, and profile/account/memory guides under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
+`make install` installs the release binary, telemetry header, and profile/account/memory/Python guides under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
 
-Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnostic sessions live in `cppbench-artifacts/` and are ignored at any directory depth, including suite-relative artifact directories. These directories can contain useful benchmark evidence; the development commands do not delete them. `.editorconfig` defines basic whitespace conventions; `cargo fmt` is authoritative for Rust formatting.
+Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnostic sessions live in `bench-artifacts/` and are ignored at any directory depth, including suite-relative artifact directories. These directories can contain useful benchmark evidence; the development commands do not delete them. `.editorconfig` defines basic whitespace conventions; `cargo fmt` is authoritative for Rust formatting.
 
 ## Code map
 
@@ -35,6 +35,7 @@ Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnos
 | `src/cli.rs` | Shared CLI option definitions and value parsing |
 | `src/app.rs` | Mode selection, output destinations, comparisons, and final output |
 | `src/benchmark.rs` | Compile-once support, warmups, measured invocations, adaptive stopping, and diagnostic handoff |
+| `src/python.rs` | Script validation, interpreter lookup, virtual-environment path preservation, and target environment preparation |
 | `src/runner.rs` | Embedded helper, sealed request transport, C FFI ownership, output capture, and correctness checks |
 | `native/launcher.c` | Fresh C helper launch, signal forwarding, and result transport (its own resource usage is discarded) |
 | `native/helper.c` | Bounded versioned request decoding in a clean C address space |
@@ -57,7 +58,7 @@ Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnos
 | `src/profiles/telemetry.rs` | Application telemetry validation and its separate replay |
 | `src/profiles/network.rs` | Socket tracing and strace parsing |
 | `src/profiles/presentation.rs` | Domain text sections shared by terminal and HTML reports |
-| `include/cppbench_telemetry.h` | Optional public C11/C++ telemetry writer |
+| `include/bench_telemetry.h` | Optional public C11/C++ telemetry writer |
 
 ## Execution flow and boundaries
 
@@ -93,6 +94,7 @@ Keep the parser independently testable. Add a small representative fixture under
 - `tests/cli.rs` covers invocation, compilation, metric selection, output checking, timeouts, and interruption.
 - `tests/diagnostics.rs` exercises tool wrappers with fake launchers and verifies replay isolation and cleanup.
 - `tests/experiments.rs` covers comparisons, suites, affinity, adaptive limits, HTML escaping, and recovery.
+- `tests/python.rs` covers Python invocation, input replay, virtual environments, failures, mixed suites, and comparison provenance.
 - `tests/profiles.rs` covers domain selection, telemetry, networking fixtures, profile regression gates, and the public header in C/C++.
 
 For structural changes, preserve CLI help, the profile catalog, serialized field names, and exit behavior. Existing integration tests provide the main behavior checks; add tests for new behavior or uncovered failures rather than mirroring private implementation details. Real profiler smoke checks complement fixtures when changing a tool integration, but should stay optional for contributors without the hardware or permissions.

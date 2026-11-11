@@ -1,6 +1,7 @@
 /target/
 /build/
 /dist/
-cppbench-artifacts/
+bench-artifacts/
 /auth/.env
 /auth/tests/__pycache__/
+cppbench-artifacts/

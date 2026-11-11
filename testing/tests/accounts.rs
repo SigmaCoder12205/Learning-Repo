@@ -16,7 +16,7 @@ fn dir() -> tempfile::TempDir {
     dir
 }
 fn command(dir: &Path, args: &[&str]) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_cppbench"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_bench"));
     command
         .args(["account", "--json", "--data-dir"])
         .arg(dir)
@@ -212,14 +212,14 @@ fn no_legacy_accounts_and_no_login_requirement_for_benchmarks() {
             .code(),
         Some(2)
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let output = Command::new(env!("CARGO_BIN_EXE_bench"))
         .args(["/bin/true", "--runs", "1", "--warmup", "0"])
         .env("XDG_DATA_HOME", temp.path())
         .output()
         .unwrap();
     assert!(output.status.success());
-    assert!(!temp.path().join("cppbench").exists());
-    let output = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    assert!(!temp.path().join("bench").exists());
+    let output = Command::new(env!("CARGO_BIN_EXE_bench"))
         .args(["--gpu", "account", "whoami"])
         .output()
         .unwrap();

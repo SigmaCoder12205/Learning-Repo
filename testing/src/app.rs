@@ -162,7 +162,7 @@ pub(crate) fn run() -> Result<i32, String> {
         match benchmark::execute(&args, &selected, &mut journal)? {
             Outcome::Report(r) => r,
             Outcome::Interrupted(signal) => {
-                eprintln!("cppbench: compilation interrupted");
+                eprintln!("bench: compilation interrupted");
                 return Ok(128 + signal);
             }
         }
@@ -187,7 +187,7 @@ pub(crate) fn run() -> Result<i32, String> {
         if args.format == "json" {
             serde_json::to_string_pretty(&report).unwrap() + "\n"
         } else {
-            let mut out = String::from("cppbench tool compatibility check\n");
+            let mut out = String::from("bench tool compatibility check\n");
             for (name, value) in report["tools"].as_object().unwrap() {
                 out.push_str(&format!(
                     "{name}: {} | {}\n",

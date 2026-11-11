@@ -6,7 +6,7 @@ use std::{
     process::{Command, Output},
 };
 fn bench(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    Command::new(env!("CARGO_BIN_EXE_bench"))
         .args(args)
         .output()
         .unwrap()
@@ -30,7 +30,7 @@ fn telemetry_is_separate_preserves_stdout_and_survives_recovery() {
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("app");
     let journal = dir.path().join("journal");
-    script(&target,&format!("if [ -n \"$CPPBENCH_TELEMETRY_FILE\" ]; then printf '%s' '{}' > \"$CPPBENCH_TELEMETRY_FILE\"; fi\nprintf 'expected\\n'",payload()));
+    script(&target,&format!("if [ -n \"$BENCH_TELEMETRY_FILE\" ]; then printf '%s' '{}' > \"$BENCH_TELEMETRY_FILE\"; fi\nprintf 'expected\\n'",payload()));
     let expected = dir.path().join("expected");
     fs::write(&expected, "expected\n").unwrap();
     let o = bench(&[
@@ -89,7 +89,10 @@ fn missing_data_is_partial_unless_required_and_bad_telemetry_fails() {
     strict.push("--require-profile-data");
     assert_eq!(bench(&strict).status.code(), Some(1));
     let target = dir.path().join("invalid");
-    script(&target,"if [ -n \"$CPPBENCH_TELEMETRY_FILE\" ]; then printf 'broken' > \"$CPPBENCH_TELEMETRY_FILE\"; fi");
+    script(
+        &target,
+        "if [ -n \"$BENCH_TELEMETRY_FILE\" ]; then printf 'broken' > \"$BENCH_TELEMETRY_FILE\"; fi",
+    );
     let bad = bench(&[
         path(&target),
         "--backend",
@@ -112,7 +115,7 @@ fn graphics_focus_has_actual_frame_statistics_without_guessing_gpu() {
     let dir = tempfile::tempdir().unwrap();
     let target = dir.path().join("frames");
     let frame = json!({"version":1,"metrics":{"gamedev.frame_ms":{"unit":"ms","samples":[10,10,20,40]},"gamedev.gpu_frame_ms":{"unit":"ms","samples":[8,9]},"gamedev.draw_calls":{"unit":"count","samples":[100,120]}}});
-    script(&target,&format!("if [ -n \"$CPPBENCH_TELEMETRY_FILE\" ]; then printf '%s' '{frame}' > \"$CPPBENCH_TELEMETRY_FILE\"; fi"));
+    script(&target,&format!("if [ -n \"$BENCH_TELEMETRY_FILE\" ]; then printf '%s' '{frame}' > \"$BENCH_TELEMETRY_FILE\"; fi"));
     let o = bench(&[
         path(&target),
         "--gamedev",
@@ -182,7 +185,7 @@ fn suite_profile_options_and_domain_regression_gates() {
     let target = dir.path().join("app");
     let suite = dir.path().join("suite.json");
     let baseline = dir.path().join("baseline.json");
-    script(&target,&format!("if [ -n \"$CPPBENCH_TELEMETRY_FILE\" ]; then printf '%s' '{}' > \"$CPPBENCH_TELEMETRY_FILE\"; fi",payload()));
+    script(&target,&format!("if [ -n \"$BENCH_TELEMETRY_FILE\" ]; then printf '%s' '{}' > \"$BENCH_TELEMETRY_FILE\"; fi",payload()));
     fs::write(&suite,json!({"version":1,"defaults":{"runs":1,"warmup":0,"backend":true,"api":true,"require_profile_data":true},"benchmarks":[{"name":"api","executable":"app"}]}).to_string()).unwrap();
     let o = bench(&[
         "--suite",
@@ -242,7 +245,7 @@ fn c_and_cpp_header_example_compiles_and_emits_valid_telemetry() {
         512000.
     );
     let c = dir.path().join("header.c");
-    fs::write(&c,"#include \"cppbench_telemetry.h\"\nint main(void) { cppbench_telemetry t = cppbench_telemetry_open(); return cppbench_telemetry_close(&t); }\n").unwrap();
+    fs::write(&c,"#include \"bench_telemetry.h\"\nint main(void) { bench_telemetry t = bench_telemetry_open(); return bench_telemetry_close(&t); }\n").unwrap();
     let c_compile = Command::new("cc")
         .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-Iinclude"])
         .arg(&c)
@@ -251,4 +254,46 @@ fn c_and_cpp_header_example_compiles_and_emits_valid_telemetry() {
         .output()
         .unwrap();
     assert!(c_compile.status.success(), "{c_compile:?}");
+}
+
+#[test]
+fn legacy_header_and_telemetry_environment_remain_compatible() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("old.c");
+    let binary = dir.path().join("old");
+    fs::write(&source, "#include \"cppbench_telemetry.h\"\nint main(void) { cppbench_telemetry t = cppbench_telemetry_open(); cppbench_telemetry_value(&t, \"backend.requests\", \"count\", 4); return cppbench_telemetry_close(&t); }\n").unwrap();
+    let compiled = Command::new("cc")
+        .args(["-std=c11", "-Wall", "-Wextra", "-Werror", "-Iinclude"])
+        .arg(&source)
+        .arg("-o")
+        .arg(&binary)
+        .output()
+        .unwrap();
+    assert!(compiled.status.success(), "{compiled:?}");
+    // New header aliases still work under an older runner that only supplies the old variable.
+    let telemetry = dir.path().join("old.json");
+    let output = Command::new(&binary)
+        .env_remove("BENCH_TELEMETRY_FILE")
+        .env("CPPBENCH_TELEMETRY_FILE", &telemetry)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    let saved: Value = serde_json::from_slice(&fs::read(telemetry).unwrap()).unwrap();
+    assert_eq!(saved["metrics"]["backend.requests"]["value"], 4.);
+    // An existing instrumented program using only legacy variables works under the new runner.
+    let target = dir.path().join("legacy");
+    script(&target, &format!("if [ -n \"$CPPBENCH_TELEMETRY_FILE\" ]; then test \"$CPPBENCH_PROFILE_FLAGS\" = backend,api || exit 1; printf '%s' '{}' > \"$CPPBENCH_TELEMETRY_FILE\"; fi", payload()));
+    let output = bench(&[
+        path(&target),
+        "--backend",
+        "--api",
+        "--require-profile-data",
+        "--runs=1",
+        "--warmup=0",
+        "--artifacts-dir",
+        path(dir.path()),
+        "--format=json",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(data(&output)["profiles"]["status"], "ok");
 }

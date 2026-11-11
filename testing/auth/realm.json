@@ -1,6 +1,6 @@
 {
   "realm": "cppbench",
-  "displayName": "cppbench",
+  "displayName": "bench",
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": true,
@@ -176,7 +176,7 @@
   "clients": [
     {
       "clientId": "cppbench-cli",
-      "name": "cppbench terminal",
+      "name": "bench terminal",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",

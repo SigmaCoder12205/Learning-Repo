@@ -91,7 +91,7 @@ pub fn render(report: &Value, detailed: bool) -> String {
         .as_array()
         .is_some_and(|m| !m.is_empty())
     {
-        out.push_str("Unavailable application metrics require CPPBENCH_TELEMETRY_FILE output. Use --list-profiles and docs/profiles.md for keys and units.\n");
+        out.push_str("Unavailable application metrics require BENCH_TELEMETRY_FILE output. Use --list-profiles and docs/profiles.md for keys and units.\n");
     }
     out
 }

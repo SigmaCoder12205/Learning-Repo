@@ -44,7 +44,7 @@ pub(super) fn run(
         "/bin/sh".into(),
         "-c".into(),
         GPU_SUPERVISOR.into(),
-        "cppbench-gpu".into(),
+        "bench-gpu".into(),
         tool,
         args.gpu_interval_ms.to_string().into(),
         raw.clone().into_os_string(),

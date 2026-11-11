@@ -52,20 +52,19 @@ pub(crate) fn execute(
             return Err(format!("{} must be a file", path.display()));
         }
     }
-    let mut env: BTreeMap<OsString, OsString> = std::env::vars_os().collect();
-    let mut env_keys = Vec::new();
-    for assignment in &args.env {
-        let (key, value) = assignment
-            .split_once('=')
-            .filter(|(k, _)| !k.is_empty())
-            .ok_or("--env requires KEY=VALUE")?;
-        env.insert(key.into(), value.into());
-        env_keys.push(key);
-    }
+    let env = crate::python::environment(args)?;
+    let env_keys: Vec<_> = args
+        .env
+        .iter()
+        .filter_map(|entry| entry.split_once('=').map(|(key, _)| key))
+        .collect();
+    let python = crate::python::prepare(args, &env)?;
     let affinity = experiment::affinity(args.cpu_affinity.as_deref())?;
     let build_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
     let mut compilation = Value::Null;
-    let binary = if !args.source.is_empty() {
+    let binary = if let Some(python) = &python {
+        python.interpreter.clone()
+    } else if !args.source.is_empty() {
         let binary = build_dir.path().join("program");
         let mut command = vec![
             compiler_path(&args.compiler, &env)?.into_os_string(),
@@ -115,18 +114,34 @@ pub(crate) fn execute(
             args.program
                 .as_deref()
                 .or(args.executable.as_deref())
-                .ok_or("provide an executable path: cppbench ./program (or use --source)")?,
+                .ok_or(
+                "provide a target: bench ./program, bench script.py, or bench --source main.cpp",
+            )?,
         )?
     };
-    let provenance = experiment::provenance(&binary, input.as_deref(), &env)?;
+    let mut provenance = experiment::provenance(&binary, input.as_deref(), &env)?;
+    let python_info = if let Some(python) = &python {
+        provenance["script_sha256"] = json!(experiment::hash_file(&python.script)?);
+        json!({"script": python.script, "interpreter": python.interpreter, "interpreter_args": display_command(&args.python_arg),
+            "measurement_scope": "Full interpreter process including startup, imports, script execution, and shutdown"})
+    } else {
+        Value::Null
+    };
     let name = args.name.clone().unwrap_or_else(|| {
-        binary
+        python
+            .as_ref()
+            .map(|p| &p.script)
+            .unwrap_or(&binary)
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned()
     });
     let mut command = vec![binary.into_os_string()];
+    if let Some(python) = &python {
+        command.extend(args.python_arg.clone());
+        command.push(python.script.clone().into_os_string());
+    }
     command.extend(args.args.clone());
     let opts = runner::RunOptions {
         cwd: &cwd,
@@ -142,7 +157,7 @@ pub(crate) fn execute(
     let mut report = json!({"schema_version":3,"tool_version":env!("CARGO_PKG_VERSION"),"name":name,
         "implementation":"Rust CLI with isolated C process measurement", "measurement_backend":runner::BACKEND,
         "memory_accounting":{"source":"Linux wait4 ru_maxrss","unit":"KiB","scope":"Peak resident memory over the target child lifetime, including C launch setup, runtime mappings and waited-for descendants; not simultaneous process-tree RSS, heap allocations or executable section size"},
-        "command":display_command(&command),"provenance":provenance,
+        "command":display_command(&command),"provenance":provenance,"python":python_info,
         "host":{"system":std::env::consts::OS,"machine":std::env::consts::ARCH,"logical_cpus":std::thread::available_parallelism().map(|n|n.get()).ok()},
         "settings":{"runs":args.runs,"warmup":args.warmup,"timeout_seconds":args.timeout,"cwd":cwd,"work_units":args.units,
             "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":input,"expected_output":expected,
@@ -167,7 +182,7 @@ pub(crate) fn execute(
     let mut stop_reason = "fixed_runs";
     for (phase, count) in [("warmups", args.warmup), ("runs", limit)] {
         if args.progress {
-            eprintln!("cppbench [{name}]: starting {phase}, limit {count}");
+            eprintln!("bench [{name}]: starting {phase}, limit {count}");
         }
         for index in 0..count {
             let mut row = runner::run(&command, &opts, &collect)?;
@@ -198,7 +213,7 @@ pub(crate) fn execute(
                     / (index + 1) as f64
                     * (count - index - 1) as f64;
                 eprintln!(
-                    "cppbench [{name}]: {phase} {}/{}; elapsed {:.1}s; ETA to run limit {:.1}s",
+                    "bench [{name}]: {phase} {}/{}; elapsed {:.1}s; ETA to run limit {:.1}s",
                     index + 1,
                     count,
                     started.elapsed().as_secs_f64(),

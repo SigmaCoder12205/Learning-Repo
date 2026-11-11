@@ -12,7 +12,7 @@ pub(super) fn run(target: &[OsString], opts: &RunOptions<'_>, dir: &Path) -> Res
     // heaptrack's shell launcher in some distributions cannot handle output paths
     // containing spaces. Record in a private temp path, then copy the finished trace.
     let scratch = tempfile::Builder::new()
-        .prefix("cppbench-heap-")
+        .prefix("bench-heap-")
         .tempdir_in("/tmp")
         .map_err(|e| e.to_string())?;
     let mut command = vec![

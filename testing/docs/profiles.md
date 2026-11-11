@@ -1,19 +1,19 @@
-# Domain profiles (cppbench 0.6)
+# Domain profiles (bench 0.6)
 
 Profiles add specialized results after the normal time, memory, CPU, and GPU report. They do not replace the baseline metric selection or infer application behavior from process runtime. The core remains Rust + native C; no Python runtime is required.
 
 ```bash
-cppbench ./program --networking
-cppbench ./program --networking --sockets --bandwidth
-cppbench ./game --gamedev --graphics --frame-budget-ms 16.666667
-cppbench ./api_test --backend --api --format html --output api.html
-cppbench ./control_test --embedded --realtime --deadline-ms 2
-cppbench ./test_driver --backend --api --qa --correctness
-cppbench --list-profiles
-cppbench --list-profiles --format json --output catalog.json
+bench ./program --networking
+bench ./program --networking --sockets --bandwidth
+bench ./game --gamedev --graphics --frame-budget-ms 16.666667
+bench ./api_test --backend --api --format html --output api.html
+bench ./control_test --embedded --realtime --deadline-ms 2
+bench ./test_driver --backend --api --qa --correctness
+bench --list-profiles
+bench --list-profiles --format json --output catalog.json
 ```
 
-A main flag selects all three of its topics. Supplying one or more of its subflags narrows that profile to those topics. Subflags require their parent; multiple main profiles can be combined. Flags before `--` belong to cppbench; flags after `--` belong to the target. The original `--compiler PATH` still selects a C++ compiler; the systems topic uses `--compilation` to avoid a collision.
+A main flag selects all three of its topics. Supplying one or more of its subflags narrows that profile to those topics. Subflags require their parent; multiple main profiles can be combined. Flags before `--` belong to bench; flags after `--` belong to the target. The original `--compiler PATH` still selects a C++ compiler; the systems topic uses `--compilation` to avoid a collision.
 
 | Main flag | Three subflags | Typical problems investigated |
 | --- | --- | --- |
@@ -35,15 +35,15 @@ These groups consolidate related roles: full-stack work uses frontend + backend;
 - Every selected profile adds relevant **baseline process context**, such as user/system CPU, peak RSS, page faults, and context switches. `--metrics` still filters baseline metrics; filtered-out context remains absent.
 - `--networking` adds a separate `strace` replay, when installed and permitted. It counts socket syscalls, errors by errno, connect attempts, returned send/receive byte counts, and elapsed syscall samples. It follows traced descendants and recognizes socket-annotated `read`/`write` calls. It also supports interrupted/resumed trace records.
 - The graphics topic (including plain `--gamedev`) requests the existing Intel GPU monitor. Device-wide activity and exact-PID attribution retain their existing scope. Missing monitor access does not prevent the rest of a profile report. Explicit `--gpu` still has its usual required-tool exit behavior.
-- All selected profiles share **one additional telemetry replay**. cppbench sets `CPPBENCH_TELEMETRY_FILE` to a fresh absolute artifact path and `CPPBENCH_PROFILE_FLAGS` to the requested comma-separated flags. If the application or test driver writes measurements there, cppbench validates and summarizes them. Baseline runs do not receive these variables from cppbench.
+- All selected profiles share **one additional telemetry replay**. bench sets `BENCH_TELEMETRY_FILE` to a fresh absolute artifact path and `BENCH_PROFILE_FLAGS` to the requested comma-separated flags. If the application or test driver writes measurements there, bench validates and summarizes them. Baseline runs do not receive these variables from bench.
 
 Thus `--backend --api` adds one replay; `--networking` adds two when strace is available; `--gamedev --graphics` adds telemetry plus GPU monitoring. Multiple profiles share these collectors. `--all-tools` continues to mean the original five diagnostics; it does not enable all profiles. `--diagnostic-timeout`, correctness checks, cwd, stdin, affinity, and artifact handling apply to profile replays too. As with other diagnostics, they inherit `LC_ALL=C`.
 
-No instrumentation is needed for ordinary process metrics or automatic socket/GPU data. **Request latency, frame times, browser vitals, database locks, device battery data, and similar application measurements require instrumentation or a test driver.** A Linux executable wrapper can collect device/browser data and write the telemetry file. cppbench does not directly run APKs, iOS applications, browser URLs, firmware, or persistent services. Benchmark a finite executable/test driver that owns the relevant workload and shuts down cleanly.
+No instrumentation is needed for ordinary process metrics or automatic socket/GPU data. **Request latency, frame times, browser vitals, database locks, device battery data, and similar application measurements require instrumentation or a test driver.** A Linux executable wrapper can collect device/browser data and write the telemetry file. bench does not directly run APKs, iOS applications, browser URLs, firmware, or persistent services. Benchmark a finite executable/test driver that owns the relevant workload and shuts down cleanly.
 
 ## Networking semantics
 
-Install optional automatic tracing on Arch with `sudo pacman -S --needed strace`; `cppbench --check-tools` now reports strace identity too. No capabilities or privilege settings are changed automatically. A separate tracing pass perturbs timing; syscall durations are **not TCP RTT or HTTP request latency**. Reported errors include normal nonblocking `EINPROGRESS`/`EAGAIN` behavior. Inspect `errors_by_errno` and workload semantics before treating them as faults.
+Install optional automatic tracing on Arch with `sudo pacman -S --needed strace`; `bench --check-tools` now reports strace identity too. No capabilities or privilege settings are changed automatically. A separate tracing pass perturbs timing; syscall durations are **not TCP RTT or HTTP request latency**. Reported errors include normal nonblocking `EINPROGRESS`/`EAGAIN` behavior. Inspect `errors_by_errno` and workload semantics before treating them as faults.
 
 Byte totals sum successful syscall return values for recognized socket send/receive/read/write operations. They describe socket API transfers, not link-layer traffic, retransmissions, or packet loss. UNIX/local sockets are included; both endpoints and descendants may be counted. Batch (`sendmmsg`/`recvmmsg`), observed zero-copy transfer, or `io_uring` activity causes automatic byte totals to be withheld instead of presenting incomplete totals as complete. Application telemetry can supply those metrics. Raw traces remain available, with payload strings truncated; endpoints and file paths may still appear.
 
@@ -54,7 +54,7 @@ Try the supplied finite, local socket benchmark:
 ```bash
 mkdir -p build
 g++ -std=c++17 -O2 examples/network_profile.cpp -o build/network_profile
-cppbench ./build/network_profile --networking --require-profile-data --intermediate
+bench ./build/network_profile --networking --require-profile-data --intermediate
 ```
 
 It executes 1,000 fixed-size round trips over a UNIX socket pair without contacting an external service. Both the tracer and the application count 512,000 bytes sent and received. This is an example of local IPC, not a measure of internet bandwidth.
@@ -81,21 +81,21 @@ Each sample array may contain 1–100,000 entries, with 200,000 entries total an
 The supplied header supports C11 and C++ without another library:
 
 ```cpp
-#include <cppbench_telemetry.h>
+#include <bench_telemetry.h>
 
 // Buffer actual measurements during the telemetry replay, then flush at shutdown.
 // frame_times_ms, gpu_times_ms and draw_calls contain your real measurements.
-auto output = cppbench_telemetry_open();
-cppbench_telemetry_samples(&output, "gamedev.frame_ms", "ms",
+auto output = bench_telemetry_open();
+bench_telemetry_samples(&output, "gamedev.frame_ms", "ms",
                           frame_times_ms.data(), frame_times_ms.size());
-cppbench_telemetry_samples(&output, "gamedev.gpu_frame_ms", "ms",
+bench_telemetry_samples(&output, "gamedev.gpu_frame_ms", "ms",
                           gpu_times_ms.data(), gpu_times_ms.size());
-cppbench_telemetry_samples(&output, "gamedev.draw_calls", "count",
+bench_telemetry_samples(&output, "gamedev.draw_calls", "count",
                           draw_calls.data(), draw_calls.size());
-if (cppbench_telemetry_close(&output) != 0) { /* handle write failure */ }
+if (bench_telemetry_close(&output) != 0) { /* handle write failure */ }
 ```
 
-`make install` also installs the header to `~/.local/include/cppbench_telemetry.h` and this guide to `~/.local/share/doc/cppbench/profiles.md` (subject to `PREFIX`). Compile with `-I"$HOME/.local/include"`, or use this checkout's `include/` directory. Check `cppbench_telemetry_enabled()` before collecting optional measurements to avoid extra sampling work in baseline runs. The header opens no file when the environment variable is absent. Use a single writer, join worker threads before flushing, keep numeric formatting in the C locale, and aggregate child-process measurements in the parent. Concurrent processes must not overwrite the same file.
+`make install` also installs the header to `~/.local/include/bench_telemetry.h` and this guide to `~/.local/share/doc/bench/profiles.md` (subject to `PREFIX`). Compile with `-I"$HOME/.local/include"`, or use this checkout's `include/` directory. Check `bench_telemetry_enabled()` before collecting optional measurements to avoid extra sampling work in baseline runs. The header opens no file when the environment variable is absent. Use a single writer, join worker threads before flushing, keep numeric formatting in the C locale, and aggregate child-process measurements in the parent. Concurrent processes must not overwrite the same file.
 
 If both the tracer and the application supply a key, validated application telemetry is displayed, with its source label; the independent trace is retained in diagnostics. Derived rates use the entire associated instrumented replay duration, including startup, shutdown, and tracing overhead. They are not steady-state server/device throughput.
 
@@ -110,8 +110,8 @@ Missing application data produces a `partial` profile and normally leaves succes
 Duration sample metrics in milliseconds can use existing regression gates:
 
 ```bash
-cppbench ./api_test --backend --api --save-baseline api-baseline.json
-cppbench ./api_test --backend --api --compare api-baseline.json \
+bench ./api_test --backend --api --save-baseline api-baseline.json
+bench ./api_test --backend --api --compare api-baseline.json \
   --regression backend.request_ms=5
 ```
 
@@ -150,7 +150,7 @@ These are design choices informed by first-party documentation and concrete deve
 
 ## Complete metric catalog
 
-The following table matches `cppbench --list-profiles`. Sample metrics take an array; counters/gauges take a scalar. Units are part of the telemetry contract.
+The following table matches `bench --list-profiles`. Sample metrics take an array; counters/gauges take a scalar. Units are part of the telemetry contract.
 
 | Profile / topic | Metric key | Unit | Kind |
 | --- | --- | --- | --- |
@@ -244,3 +244,5 @@ The following table matches `cppbench --list-profiles`. Sample metrics take an a
 | `systems / concurrency` | `systems.lock_wait_ms` | `ms` | samples |
 | `systems / concurrency` | `systems.tasks` | `count` | counter |
 | `systems / concurrency` | `systems.queue_ms` | `ms` | samples |
+
+The old `cppbench_telemetry.h` header and `cppbench_telemetry_*` names remain compatibility aliases. Replays supply both `BENCH_*` and legacy `CPPBENCH_*` telemetry variables so previously instrumented binaries continue to work. Python applications can write the same JSON schema using the standard library; see [the Python guide](python.md).

@@ -14,11 +14,11 @@ static void on_interrupt(int sig) { interrupted = sig; }
 
 /* The Rust process only supervises this fresh C executable. Its own wait usage
  * is deliberately discarded: only the helper's target wait4 result is returned. */
-int cppbench_measure(int helper, int request, int reply, int input, int output,
+int bench_measure(int helper, int request, int reply, int input, int output,
                      int error, struct measurement *result) {
     int fds[] = {request, reply, input, output, error};
     char numbers[5][32];
-    char *argv[7] = {"cppbench-measure", NULL, NULL, NULL, NULL, NULL, NULL};
+    char *argv[7] = {"bench-measure", NULL, NULL, NULL, NULL, NULL, NULL};
     for (size_t i = 0; i < 5; i++) {
         snprintf(numbers[i], sizeof numbers[i], "%d", fds[i]);
         argv[i + 1] = numbers[i];

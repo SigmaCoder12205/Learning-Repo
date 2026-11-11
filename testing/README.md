@@ -1,29 +1,32 @@
-# cppbench
+# bench
 
-A native **Rust + C** command-line benchmark tool for Linux. Pass an executable path for a simple overview:
+A native **Rust + C** command-line benchmark tool for Linux. Pass an executable or Python script path for a simple overview:
 
 ```bash
-cppbench /path/to/your/program
+bench /path/to/your/program
+bench workload.py
 ```
 
 The default is one warmup followed by ten measured invocations. The overview shows average time, highest peak memory, average CPU usage, GPU availability, throughput, output sizes, and timing variation. Use `--intermediate` for resource ranges or `--advanced` for all 15 metrics, full statistics, and individual runs.
 
-Rust handles the CLI, statistics, correctness checks, and reports. A small, isolated C helper handles process launch, monotonic timing, Linux `wait4` resource accounting, deadlines, and process-group cleanup. Its executable is embedded in cppbench and run from a sealed Linux memory file, so installation still needs only the cppbench executable. **No Python interpreter, wrapper, or runtime is used.**
+Rust handles the CLI, statistics, correctness checks, and reports. A small, isolated C helper handles process launch, monotonic timing, Linux `wait4` resource accounting, deadlines, and process-group cleanup. Its executable is embedded in bench and run from a sealed Linux memory file, so installation still needs only the bench executable. The benchmark engine itself needs no Python runtime. Python workloads run through your selected interpreter.
+
+Version **0.10** renames `cppbench` to `bench` and adds Python script support, interpreter selection, and mixed native/Python suites. `make install` also installs a `cppbench` compatibility symlink. Existing account storage and Keycloak identifiers are preserved, and old telemetry headers/environment variables remain supported. New diagnostic artifacts use `bench-artifacts/`; existing artifacts are left in place. See [benchmarking Python](docs/python.md).
 
 Version **0.9** isolates target launches from the Rust process's resident memory. This prevents report/history allocations from inflating a child's peak RSS across `fork`/`exec`. Reports identify the measurement backend; regenerate saved baselines when upgrading from earlier versions. See [what memory measurements mean](docs/memory.md), including why GNU `size` and runtime RSS differ.
 
 Version 0.5 adds saved comparisons and regression gates, workload suites, CPU hotspots and flamegraphs, adaptive sampling, CPU affinity, target-PID Intel GPU metrics, offline HTML reports, and checkpoint recovery. See [the experiment guide](docs/experiments.md) for commands, configuration, and limitations.
 
-Version **0.6** adds **10 domain flags with 3 subflags each**, including `--networking --bandwidth`, `--gamedev --graphics`, and `--backend --api`. The normal report stays intact; domain sections add traced socket statistics, GPU diagnostics, and validated application telemetry. Run `cppbench --list-profiles` for all 40 flags and 90 supported metric keys. See [domain profiles and instrumentation](docs/profiles.md) for the full matrix, research sources, and examples. `strace` is an optional dependency for automatic socket tracing.
+Version **0.6** adds **10 domain flags with 3 subflags each**, including `--networking --bandwidth`, `--gamedev --graphics`, and `--backend --api`. The normal report stays intact; domain sections add traced socket statistics, GPU diagnostics, and validated application telemetry. Run `bench --list-profiles` for all 40 flags and 90 supported metric keys. See [domain profiles and instrumentation](docs/profiles.md) for the full matrix, research sources, and examples. `strace` is an optional dependency for automatic socket tracing.
 
 Version **0.8** replaces the local Rust account database with **Keycloak + PostgreSQL**. Accounts have no expiration date; the CLI keeps a persistent, revocable login using OAuth/PKCE and offline refresh. Passwords and account management live in Keycloak's browser pages. Benchmarking works without login or the account service. See [accounts and local setup](docs/accounts.md), including the ten-year inactivity limit on saved logins.
 
 ```bash
 ./auth/scripts/setup.sh          # Requires Docker + Compose; first run downloads images
-cppbench account register       # Register in your browser and sign in
-cppbench account whoami
-cppbench account logout
-cppbench account login
+bench account register       # Register in your browser and sign in
+bench account whoami
+bench account logout
+bench account login
 ```
 
 ## Build and install
@@ -32,11 +35,11 @@ Requirements: Linux, Rust 1.89+ and Cargo, a C compiler (`cc`, GCC, or Clang), a
 
 ```bash
 make install
-cppbench --version
-cppbench ./build/my_program
+bench --version
+bench ./build/my_program
 ```
 
-`make install` builds an optimized release executable and installs it to `~/.local/bin/cppbench`. Ensure that directory is on your PATH:
+`make install` builds an optimized release executable and installs it to `~/.local/bin/bench`. Ensure that directory is on your PATH:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
@@ -46,19 +49,19 @@ Add that line to your shell startup file if needed. Change the destination with 
 
 ```bash
 cargo build --release --locked
-./target/release/cppbench /path/to/program
+./target/release/bench /path/to/program
 ```
 
-After changing the tool, run `make install` again. The installed binary works independently of this checkout. This version replaces the Python package and its `python3 -m cppbench` interface.
+After changing the tool, run `make install` again. The installed binary works independently of this checkout. Invoke the installed `bench` executable directly; it is not a Python package.
 
 ## Usage
 
 ### Choose the detail level
 
 ```bash
-cppbench ./program                 # Simple overview (default)
-cppbench ./program --intermediate  # Resource breakdown, averages, and ranges
-cppbench ./program --advanced      # Every statistic, configuration, and individual run
+bench ./program                 # Simple overview (default)
+bench ./program --intermediate  # Resource breakdown, averages, and ranges
+bench ./program --advanced      # Every statistic, configuration, and individual run
 ```
 
 Alternatively, use `--view simple`, `--view intermediate`, or `--view advanced`. Choose one view flag per invocation. Views change text presentation; JSON and CSV retain all selected data.
@@ -74,22 +77,33 @@ Intermediate view adds user/system CPU time and filesystem I/O operations, with 
 Build with your normal build system, then pass the resulting executable:
 
 ```bash
-cppbench ./build/my_program
-cppbench ./build/my_program --runs 30 --warmup 3 --timeout 120
-cppbench ./build/my_program --runs 20 -- --size 10000000 --mode batch
+bench ./build/my_program
+bench ./build/my_program --runs 30 --warmup 3 --timeout 120
+bench ./build/my_program --runs 20 -- --size 10000000 --mode batch
 ```
 
 Every invocation runs to completion or its deadline. Ten measured runs of a ten-minute program take roughly 100 minutes, plus warmups; choose `--runs`, `--warmup`, and `--timeout` accordingly.
 
 Benchmark flags go before `--`. Arguments after it are passed directly to the target without shell interpretation. Quote paths containing spaces. The executable path is resolved relative to the invoking directory, even with `--cwd`. The explicit `--executable PATH` form is also supported.
 
+### Benchmark Python
+
+```bash
+bench workload.py
+bench workload.py --intermediate --runs 30 -- --size 100000
+bench workload.py --interpreter .venv/bin/python --python-arg=-O
+bench --python script_without_extension --input input.txt
+```
+
+Install Python and your workload's dependencies in the chosen environment. The default interpreter is `python3` from PATH. Scripts do not need an executable bit or shebang. Each run measures a fresh interpreter process, including startup, imports, script execution, and shutdown; peak memory includes the interpreter and loaded modules. See [the Python guide](docs/python.md) for suites, telemetry, and measurement scope.
+
 ### Select results
 
 ```bash
-cppbench ./program --metrics wall,rss,major_faults
-cppbench ./program --metrics timing,memory
-cppbench ./program --metrics io,scheduling
-cppbench --list-metrics
+bench ./program --metrics wall,rss,major_faults
+bench ./program --metrics timing,memory
+bench ./program --metrics io,scheduling
+bench --list-metrics
 ```
 
 All 15 metrics are collected by default, while the text view chooses how much to display. An explicit `--metrics` selection overrides the view's default metric rows and filters JSON/CSV too. For example, `--metrics wall` shows only time-related results in any text view; `--metrics all` shows every metric even with simple formatting. OS resource counters are collected together regardless of selection. Duplicate selections are removed.
@@ -97,9 +111,9 @@ All 15 metrics are collected by default, while the text view chooses how much to
 ### Save reports
 
 ```bash
-cppbench ./program --format json --output results.json
-cppbench ./program --metrics wall,cpu,rss --format csv --output results.csv
-cppbench ./program --format html --output results.html
+bench ./program --format json --output results.json
+bench ./program --metrics wall,cpu,rss --format csv --output results.csv
+bench ./program --format html --output results.html
 ```
 
 Text prints the chosen detail level and failure diagnostics. JSON records settings, host metadata, compiler information when applicable, individual warmups and measured runs, metric units, summaries, GPU availability, and diagnostic previews. CSV has one row per measured invocation, including status, exit code, and selected metrics; it excludes warmups and summary statistics. Use JSON for the full record. View flags do not reduce export detail.
@@ -109,14 +123,14 @@ Reports go to stdout unless `--output` is specified. The file's parent directory
 ### CPU counters, GPU monitoring, allocations, and memory errors
 
 ```bash
-cppbench ./program --perf
-cppbench ./program --gpu
-cppbench ./program --heaptrack
-cppbench ./program --valgrind
-cppbench ./program --hotspots
-cppbench ./program --all-tools --advanced
+bench ./program --perf
+bench ./program --gpu
+bench ./program --heaptrack
+bench ./program --valgrind
+bench ./program --hotspots
+bench ./program --all-tools --advanced
 
-cppbench ./program --perf --valgrind --diagnostic-timeout 300 \
+bench ./program --perf --valgrind --diagnostic-timeout 300 \
   --artifacts-dir ./profiles --format json --output results.json -- --size 1000000
 ```
 
@@ -146,11 +160,11 @@ If `intel_gpu_top` reports `Permission denied` / `CAP_PERFMON`, an administrator
 sudo setcap cap_perfmon=ep /usr/bin/intel_gpu_top
 ```
 
-This grants performance-monitoring access to that executable; it does not require running the benchmark target as root. Package updates may remove the capability. cppbench does not change system permissions or invoke sudo. The same restrictions may affect perf, though user-space events often work with the existing configuration. See the [kernel perf security documentation](https://www.kernel.org/doc/html/latest/admin-guide/perf-security.html).
+This grants performance-monitoring access to that executable; it does not require running the benchmark target as root. Package updates may remove the capability. bench does not change system permissions or invoke sudo. The same restrictions may affect perf, though user-space events often work with the existing configuration. See the [kernel perf security documentation](https://www.kernel.org/doc/html/latest/admin-guide/perf-security.html).
 
 If Valgrind cannot establish required loader redirections, it needs matching loader/library debug symbols. Preserve a working `DEBUGINFOD_URLS` configuration or install your distribution's matching debug symbols; the diagnostic timeout still applies. Invalid or incomplete tool output is reported as unavailable or failed, not as a clean result.
 
-Every requested diagnostic session creates a unique directory under `cppbench-artifacts/` (override with `--artifacts-dir`). It contains `diagnostics.json`, captured stdout/stderr, and applicable `perf.csv`, `gpu.json`, `valgrind.xml`, compressed heap trace, and `heaptrack-analysis.stdout`. Raw files are retained even for failures where available. Heaptrack uses a private `/tmp` staging directory to accommodate launcher path handling, then copies its trace into the artifact directory. Its launcher mixes messages with target stdout, so exact output comparison is skipped for that pass; the baseline, perf, GPU replay, and Valgrind still honor `--expect-output`.
+Every requested diagnostic session creates a unique directory under `bench-artifacts/` (override with `--artifacts-dir`). It contains `diagnostics.json`, captured stdout/stderr, and applicable `perf.csv`, `gpu.json`, `valgrind.xml`, compressed heap trace, and `heaptrack-analysis.stdout`. Raw files are retained even for failures where available. Heaptrack uses a private `/tmp` staging directory to accommodate launcher path handling, then copies its trace into the artifact directory. Its launcher mixes messages with target stdout, so exact output comparison is skipped for that pass; the baseline, perf, GPU replay, and Valgrind still honor `--expect-output`.
 
 Text shows a concise diagnostic summary, with counter detail and more context in intermediate/advanced views. JSON embeds all parsed diagnostic results under `diagnostics.results` and GPU status under `gpu`. CSV remains a table of baseline measurements; the separate `diagnostics.json` contains tool results. Explicit `--metrics` filters baseline metrics, not separately requested tools. Diagnostic progress goes to stderr.
 
@@ -159,7 +173,7 @@ Tool statuses include `ok`, `partial`, `unavailable`, `failed`, `findings`, `int
 ### Input and correctness
 
 ```bash
-cppbench ./solver --input cases/input.txt \
+bench ./solver --input cases/input.txt \
   --expect-output cases/expected.txt --expect-exit 0
 ```
 
@@ -169,18 +183,18 @@ For a calculator that reads an operation, one number per line, then `q`, supply 
 
 ```bash
 printf '+\n2\n3\nq\n' > calculator-input.txt
-cppbench ./calculator --input calculator-input.txt --intermediate
+bench ./calculator --input calculator-input.txt --intermediate
 ```
 
 The same sample is included in `examples/calculator-input.txt`. Every warmup and measured run receives the whole file from the beginning. This measures the complete scripted process invocation, including prompts and input parsing, rather than just arithmetic.
 
-If the first warmup reaches `output_limit`, no measured runs start. A program that ignores failed reads at EOF can print prompts indefinitely, even though no person is typing. cppbench reports the captured byte counts, a bounded stdout preview, and input guidance. In C++, check `if (!(std::cin >> operation))` before using the operation and `if (!std::getline(std::cin, line))` before processing each line; exit or return an error on EOF instead of retrying forever. Increasing the output limit does not fix such a loop.
+If the first warmup reaches `output_limit`, no measured runs start. A program that ignores failed reads at EOF can print prompts indefinitely, even though no person is typing. bench reports the captured byte counts, a bounded stdout preview, and input guidance. In C++, check `if (!(std::cin >> operation))` before using the operation and `if (!std::getline(std::cin, line))` before processing each line; exit or return an error on EOF instead of retrying forever. Increasing the output limit does not fix such a loop.
 
 ### Working directory, environment, and throughput
 
 ```bash
-cppbench ./build/solver --cwd ./data --env OMP_NUM_THREADS=4 --env MODE=fast
-cppbench ./program --units 1000000 -- --items 1000000
+bench ./build/solver --cwd ./data --env OMP_NUM_THREADS=4 --env MODE=fast
+bench ./program --units 1000000 -- --items 1000000
 ```
 
 The environment is inherited, with repeatable `--env KEY=VALUE` overrides. `--cwd` changes only the target working directory. Input/expected-output paths remain relative to the invoking directory. `--units` declares work completed **per invocation**; throughput is units divided by wall seconds. The default of one reports invocations per second. The tool does not infer work from arguments or output.
@@ -188,9 +202,9 @@ The environment is inherited, with repeatable `--env KEY=VALUE` overrides. `--cw
 ### Compile C++ sources
 
 ```bash
-cppbench --source examples/workload.cpp --runs 20 -- 50000000
+bench --source examples/workload.cpp --runs 20 -- 50000000
 
-cppbench --source main.cpp helpers.cpp \
+bench --source main.cpp helpers.cpp \
   --compiler clang++ --std c++20 --opt 3 \
   --cxxflag=-march=native --cxxflag=-DNDEBUG --cxxflag=-Iinclude \
   --cxxflag=-pthread --ldflag=-pthread --ldflag=-lm \
@@ -229,7 +243,7 @@ Groups:
 
 ## Options
 
-The new experiment/report options are listed in [the experiment guide](docs/experiments.md). `cppbench --help` lists every flag.
+The new experiment/report options are listed in [the experiment guide](docs/experiments.md). `bench --help` lists every flag.
 
 | Option | Default | Purpose |
 | --- | --- | --- |
@@ -265,7 +279,7 @@ The new experiment/report options are listed in [the experiment guide](docs/expe
 | `--valgrind` | Off | One extra replay with Memcheck |
 | `--all-tools` | Off | Enable all five diagnostic passes |
 | `--diagnostic-timeout SECONDS` | `120` | Deadline for each diagnostic/analysis command |
-| `--artifacts-dir DIRECTORY` | `cppbench-artifacts` | Parent for unique retained diagnostic sessions |
+| `--artifacts-dir DIRECTORY` | `bench-artifacts` | Parent for unique retained diagnostic sessions |
 | `--perf-events LIST` | Six user-space hardware events | Comma-separated perf events |
 | `--gpu-interval-ms N` | `100` | GPU sampling interval, 10–60000 ms |
 | `--gpu-device SELECTOR` | Tool default | Intel GPU device selector |
@@ -315,4 +329,4 @@ make verify
 
 See [the development guide](docs/development.md) for the module map, execution flow, test commands, and instructions for adding profiles or diagnostic tools. The entrypoint delegates to separate CLI, application, benchmark, statistics, and storage modules. Each external tool owns its runner, parser, and parser tests under `src/diagnostics/`. Profile definitions, telemetry, networking, and presentation live under `src/profiles/`. The measurement boundary spans `src/runner.rs`, `native/launcher.c`, `native/helper.c`, and `native/measure.c`.
 
-JSON uses `schema_version: 3`, with additive `gpu`, `diagnostics`, `measurement_backend`, and `memory_accounting` fields. Metric names and successful-run aggregation remain consistent. Complete statistical columns are available in advanced text view and JSON. Diagnostic measurements are nested separately and never enter baseline aggregates.
+JSON uses `schema_version: 3`, with additive `gpu`, `diagnostics`, `measurement_backend`, `memory_accounting`, and `python` fields. Metric names and successful-run aggregation remain consistent. Complete statistical columns are available in advanced text view and JSON. Diagnostic measurements are nested separately and never enter baseline aggregates.

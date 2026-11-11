@@ -1,4 +1,5 @@
-get codex to make a testing program that I can pass in any C++ program and it'll bench mark it
+Ask codex does it have all the same flags as the c++ benchmarker also 
+test the python benchmarking 
 
 
 THINGS TO MAYBE DO

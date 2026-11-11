@@ -37,7 +37,7 @@ static void child_failure(int fd) {
     _exit(127);
 }
 
-int cppbench_measure_target(const char *executable, char *const argv[], char *const envp[],
+int bench_measure_target(const char *executable, char *const argv[], char *const envp[],
                      const char *cwd, int input, int output, int error,
                      double timeout, double output_limit, double units,
                      const unsigned *cpus, size_t cpu_count,

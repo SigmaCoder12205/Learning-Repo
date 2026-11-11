@@ -77,4 +77,5 @@ requires the #include <type_traits> header
 
 how to compile C++ the best way 
 
-g++ -std=c++20 -Wall -Wextra -O2 main.cpp -o program
+g++ -std=c++20 -Wall -Wextra -O2
+main.cpp -o program

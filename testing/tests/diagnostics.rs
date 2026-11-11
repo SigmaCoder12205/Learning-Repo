@@ -14,7 +14,7 @@ fn script(dir: &Path, name: &str, body: &str) -> std::path::PathBuf {
     path
 }
 fn run(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    Command::new(env!("CARGO_BIN_EXE_bench"))
         .args(args)
         .args([
             "--warmup",
@@ -56,7 +56,7 @@ fn perf_replays_target_and_preserves_baseline_and_correctness() {
     let input = dir.path().join("input");
     fs::write(&input, b"binary\0input\n").unwrap();
     let counter = dir.path().join("counter");
-    let out = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bench"))
         .arg(&target)
         .args([
             "--perf", "--warmup", "1", "--runs", "2", "--format", "json", "--input",
@@ -89,7 +89,7 @@ fn perf_replays_target_and_preserves_baseline_and_correctness() {
 #[test]
 fn missing_tool_does_not_erase_baseline() {
     let dir = tempfile::tempdir().unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bench"))
         .args([
             "/bin/true",
             "--perf",
@@ -222,7 +222,7 @@ printf '[{"engines":{"Render/3D":{"busy":99}}},{"engines":{"Render/3D":{"busy":2
 sleep 0.2
 "#,
     );
-    let out = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let out = Command::new(env!("CARGO_BIN_EXE_bench"))
         .args([
             "/bin/sleep",
             "--gpu",
@@ -298,7 +298,7 @@ fn interrupting_diagnostic_stops_tools_and_keeps_baseline_report() {
         "echo $$ > \"$TOOL_PIDFILE\"; exec /bin/sleep 30",
     );
     let pidfile = dir.path().join("pid");
-    let child = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let child = Command::new(env!("CARGO_BIN_EXE_bench"))
         .args([
             "/bin/true",
             "--perf",

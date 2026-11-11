@@ -1,13 +1,13 @@
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
-        panic!("cppbench currently requires Linux");
+        panic!("bench currently requires Linux");
     }
     println!("cargo:rerun-if-changed=native/measure.c");
     println!("cargo:rerun-if-changed=native/measure.h");
     println!("cargo:rerun-if-changed=native/helper.c");
     println!("cargo:rerun-if-changed=native/launcher.c");
     let helper =
-        std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("cppbench-measure");
+        std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("bench-measure");
     let status = cc::Build::new()
         .get_compiler()
         .to_command()
@@ -32,5 +32,5 @@ fn main() {
         .flag_if_supported("-std=c11")
         .warnings(true)
         .extra_warnings(true)
-        .compile("cppbench_measure");
+        .compile("bench_measure");
 }

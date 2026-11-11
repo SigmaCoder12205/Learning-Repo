@@ -32,7 +32,7 @@ pub(super) enum Error {
 impl From<Error> for String {
     fn from(e: Error) -> String {
         match e {
-            Error::SignedOut => "login is no longer valid; run cppbench account login".into(),
+            Error::SignedOut => "login is no longer valid; run bench account login".into(),
             Error::Other(e) => e,
         }
     }

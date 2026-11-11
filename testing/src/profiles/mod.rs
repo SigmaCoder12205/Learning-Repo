@@ -96,7 +96,9 @@ pub fn catalog_text() -> String {
             }
         }
     }
-    out.push_str("Application-specific metrics require CPPBENCH_TELEMETRY_FILE output; see docs/profiles.md.\n");
+    out.push_str(
+        "Application-specific metrics require BENCH_TELEMETRY_FILE output; see docs/profiles.md.\n",
+    );
     out
 }
 
@@ -176,7 +178,7 @@ mod tests {
             assert!(flags.insert(p.flag));
             assert_eq!(p.topics.len(), 3);
             let matches = command()
-                .try_get_matches_from(["cppbench", &format!("--{}", p.flag)])
+                .try_get_matches_from(["bench", &format!("--{}", p.flag)])
                 .unwrap();
             assert_eq!(selected(&selection(&matches))[0].1.len(), 3);
             for topic in p.topics {
@@ -184,14 +186,14 @@ mod tests {
                 assert_eq!(topic.metrics.len(), 3);
                 let matches = command()
                     .try_get_matches_from([
-                        "cppbench",
+                        "bench",
                         &format!("--{}", p.flag),
                         &format!("--{}", topic.flag),
                     ])
                     .unwrap();
                 assert_eq!(selected(&selection(&matches))[0].1.len(), 1);
                 assert!(command()
-                    .try_get_matches_from(["cppbench", &format!("--{}", topic.flag)])
+                    .try_get_matches_from(["bench", &format!("--{}", topic.flag)])
                     .is_err());
                 for m in topic.metrics {
                     assert!(keys.insert(m.key), "duplicate {}", m.key);

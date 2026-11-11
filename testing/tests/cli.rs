@@ -8,7 +8,7 @@ use std::{
 };
 
 fn bench(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    Command::new(env!("CARGO_BIN_EXE_bench"))
         .args(args)
         .output()
         .unwrap()
@@ -384,7 +384,7 @@ fn assert_dead(pid: &str) {
 fn interruption_cleans_up_descendants() {
     let dir = tempfile::tempdir().unwrap();
     let pidfile = dir.path().join("pid");
-    let child = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let child = Command::new(env!("CARGO_BIN_EXE_bench"))
         .args([
             "/bin/sh",
             "--cwd",
@@ -444,16 +444,16 @@ fn compiler_interruption_cleans_up_and_returns_signal_exit_code() {
     fs::write(&source, "int main() {}\n").unwrap();
     fs::write(
         &compiler,
-        "#!/bin/sh\nsleep 30 & echo $! > \"$CPPBENCH_PIDFILE\"; wait\n",
+        "#!/bin/sh\nsleep 30 & echo $! > \"$BENCH_PIDFILE\"; wait\n",
     )
     .unwrap();
     fs::set_permissions(&compiler, fs::Permissions::from_mode(0o755)).unwrap();
-    let child = Command::new(env!("CARGO_BIN_EXE_cppbench"))
+    let child = Command::new(env!("CARGO_BIN_EXE_bench"))
         .arg("--source")
         .arg(&source)
         .arg("--compiler")
         .arg(&compiler)
-        .env("CPPBENCH_PIDFILE", &pidfile)
+        .env("BENCH_PIDFILE", &pidfile)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -626,7 +626,7 @@ int main(int argc, char **argv) {
     );
     assert!(
         (measured - reported).abs() < 1024.,
-        "cppbench {measured} vs target self-accounting {reported}"
+        "bench {measured} vs target self-accounting {reported}"
     );
     assert_eq!(r["measurement_backend"], "isolated-c-wait4-v1");
     assert_eq!(r["memory_accounting"]["unit"], "KiB");
