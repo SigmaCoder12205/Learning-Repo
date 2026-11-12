@@ -116,6 +116,11 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
             differences.push(format!("setting {key} differs"));
         }
     }
+    if current["settings"]["cooldown_ms"].as_u64().unwrap_or(0)
+        != baseline["settings"]["cooldown_ms"].as_u64().unwrap_or(0)
+    {
+        differences.push("setting cooldown_ms differs".into());
+    }
     if current["command"].as_array().map(|a| a.get(1..))
         != baseline["command"].as_array().map(|a| a.get(1..))
     {
@@ -230,6 +235,7 @@ pub fn exit_code(report: &Value) -> i32 {
                 r["measurement_passed"] != true
                     || r["diagnostics"]["failed"] == true
                     || r["profiles"]["failed"] == true
+                    || r["python_overhead"]["failed"] == true
             })
         {
             return 1;
@@ -238,6 +244,7 @@ pub fn exit_code(report: &Value) -> i32 {
         || report["measurement_passed"] != true
         || report["diagnostics"]["failed"] == true
         || report["profiles"]["failed"] == true
+        || report["python_overhead"]["failed"] == true
     {
         return 1;
     }
@@ -246,6 +253,29 @@ pub fn exit_code(report: &Value) -> i32 {
         Some("regression") => 3,
         _ => 0,
     }
+}
+
+/// Advisory thresholds share compatibility/missing-data rules but do not cause exit 3.
+pub(crate) fn apply_warnings(
+    current: &mut Value,
+    baseline: &Value,
+    limits: &BTreeMap<String, f64>,
+    allow: bool,
+) {
+    let mut advisory = current.clone();
+    apply(&mut advisory, baseline, limits, allow);
+    fn attach(current: &mut Value, advisory: &Value) {
+        current["comparison"]["advisory"] = advisory["comparison"].clone();
+        if advisory["comparison"]["status"] == "incompatible" {
+            current["comparison"]["status"] = json!("incompatible");
+        }
+        if let Some(cases) = current["cases"].as_array_mut() {
+            for (index, case) in cases.iter_mut().enumerate() {
+                attach(case, &advisory["cases"][index]);
+            }
+        }
+    }
+    attach(current, &advisory);
 }
 #[cfg(test)]
 mod tests {

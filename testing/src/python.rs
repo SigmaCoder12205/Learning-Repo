@@ -22,11 +22,15 @@ pub(crate) fn prepare(
             .filter(|p| p.extension() == Some(OsStr::new("py")) || explicit_options)
     });
     let Some(script) = script else {
+        if args.python_overhead {
+            return Err("--python-overhead requires a Python script workload".into());
+        }
         if explicit_options {
             return Err("Python options require a script path or --python SCRIPT".into());
         }
         return Ok(None);
     };
+    crate::runtime::validate_calibration(args)?;
     let script = script
         .canonicalize()
         .map_err(|e| format!("Python script {}: {e}", script.display()))?;

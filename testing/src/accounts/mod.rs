@@ -9,11 +9,6 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 use store::{Session, Store};
 
-#[derive(Subcommand, Debug, Clone)]
-pub(crate) enum Command {
-    /// Keycloak accounts: browser registration/login and persistent CLI sessions
-    Account(Options),
-}
 #[derive(Args, Debug, Clone)]
 pub(crate) struct Options {
     /// Private CLI session directory (absolute path); contains no account database

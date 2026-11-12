@@ -18,8 +18,11 @@ pub(crate) fn run() -> Result<i32, String> {
     let command = profiles::command();
     let matches = command.clone().get_matches();
     let mut args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
-    if let Some(crate::accounts::Command::Account(options)) = args.command.take() {
-        return crate::accounts::run(options);
+    if let Some(command) = args.command.take() {
+        return match command {
+            crate::cli::Command::Account(options) => crate::accounts::run(options),
+            crate::cli::Command::History(options) => crate::history::run(options),
+        };
     }
     args.profile_flags = profiles::selection(&matches);
     if args.list_profiles {
@@ -56,6 +59,11 @@ pub(crate) fn run() -> Result<i32, String> {
             "advanced",
             "intermediate",
             "view",
+            "histogram",
+            "record_history",
+            "history_dir",
+            "compare_pin",
+            "warn_regression",
             "help",
             "version",
         ];
@@ -88,6 +96,11 @@ pub(crate) fn run() -> Result<i32, String> {
                 "advanced",
                 "intermediate",
                 "view",
+                "histogram",
+                "record_history",
+                "history_dir",
+                "compare_pin",
+                "warn_regression",
             ]
         };
         for id in matches
@@ -141,8 +154,28 @@ pub(crate) fn run() -> Result<i32, String> {
         }
         destinations.push(path);
     }
-    let baseline = args.compare.as_deref().map(comparison::load).transpose()?;
+    if args.history_dir.is_some() && !args.record_history && args.compare_pin.is_none() {
+        return Err("--history-dir requires --record-history or --compare-pin".into());
+    }
+    let history_root = if args.record_history || args.compare_pin.is_some() {
+        Some(crate::history::location(args.history_dir.as_deref())?)
+    } else {
+        None
+    };
+    let baseline = if let Some(pin) = &args.compare_pin {
+        Some(crate::history::read(
+            history_root.as_deref().unwrap(),
+            pin,
+            true,
+        )?)
+    } else {
+        args.compare.as_deref().map(comparison::load).transpose()?
+    };
     let limits = comparison::thresholds(&args.regression)?;
+    let warning_limits = comparison::thresholds(&args.warn_regression)?;
+    if args.record_history {
+        crate::history::prepare(history_root.as_deref().unwrap())?;
+    }
     let view = if args.advanced {
         View::Advanced
     } else if args.intermediate {
@@ -169,6 +202,21 @@ pub(crate) fn run() -> Result<i32, String> {
     };
     if let Some(baseline) = baseline {
         comparison::apply(&mut report, &baseline, &limits, args.allow_mismatch);
+        if !warning_limits.is_empty() {
+            comparison::apply_warnings(
+                &mut report,
+                &baseline,
+                &warning_limits,
+                args.allow_mismatch,
+            );
+        }
+    }
+    if args.histogram {
+        crate::insights::enable_histogram(&mut report);
+    }
+    if args.record_history {
+        let id = crate::history::record(history_root.as_deref().unwrap(), &mut report)?;
+        eprintln!("bench: saved history {id}");
     }
     journal.emit(json!({"event":"final","report":report}))?;
     if let Some(path) = &args.save_baseline {

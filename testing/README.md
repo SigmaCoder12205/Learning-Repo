@@ -1,5 +1,16 @@
 # bench
 
+Continuing development in a new chat? Read the [project history and handoff](HANDOFF.md) and [development guide](docs/development.md).
+
+Version **0.11** adds runtime identification, separate Python startup calibration, ASCII histograms, per-run outlier labels, private local history, named baseline pins, warning-only regression thresholds, and interruptible cooldowns. See the [feature guide](docs/features.md) and [brainstorm/roadmap](docs/roadmap.md).
+
+```bash
+bench workload.py --python-overhead --histogram --record-history
+bench history list
+bench history pin RUN_ID stable
+bench workload.py --compare-pin stable --warn-regression wall=3 --regression wall=10
+```
+
 A native **Rust + C** command-line benchmark tool for Linux. Pass an executable or Python script path for a simple overview:
 
 ```bash

@@ -48,6 +48,45 @@ pub struct RunOptions<'a> {
 /// Versioned measurement provenance; old fork-from-Rust baselines are incompatible.
 pub(crate) const BACKEND: &str = "isolated-c-wait4-v1";
 
+/// A between-run pause that preserves INT/TERM as a reportable interruption.
+/// Like the native launcher, this is called only from the single execution thread.
+pub(crate) fn cooldown(milliseconds: u64) -> Result<i32, String> {
+    // SAFETY: all signal sets/timespecs are initialized, pointers stay live for each
+    // synchronous call, and the original signal mask is restored on every path.
+    unsafe {
+        let mut signals: libc::sigset_t = std::mem::zeroed();
+        let mut old: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut signals);
+        libc::sigaddset(&mut signals, libc::SIGINT);
+        libc::sigaddset(&mut signals, libc::SIGTERM);
+        if libc::sigprocmask(libc::SIG_BLOCK, &signals, &mut old) != 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(milliseconds);
+        let result = loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            let timeout = libc::timespec {
+                tv_sec: remaining.as_secs() as libc::time_t,
+                tv_nsec: remaining.subsec_nanos() as libc::c_long,
+            };
+            let signal = libc::sigtimedwait(&signals, std::ptr::null_mut(), &timeout);
+            if signal >= 0 {
+                break Ok(signal);
+            }
+            let error = std::io::Error::last_os_error();
+            match error.raw_os_error() {
+                Some(libc::EAGAIN) => break Ok(0),
+                Some(libc::EINTR) => continue,
+                _ => break Err(error.to_string()),
+            }
+        };
+        if libc::sigprocmask(libc::SIG_SETMASK, &old, std::ptr::null_mut()) != 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        result
+    }
+}
+
 fn memory_file(name: &std::ffi::CStr, executable: bool) -> std::io::Result<File> {
     let flags = libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING;
     // MFD_EXEC is supported from Linux 6.3; older kernels allow executable memfds by default.
@@ -228,6 +267,9 @@ pub fn run_logged(
             );
         }
         let mut row = json!({"status": status, "exit_code": measured.exit_code, "metrics": metrics,
+                  "termination": if measured.exit_code < 0 {
+                      json!({"kind":"signal", "signal":-measured.exit_code, "name":signal_name(-measured.exit_code)})
+                  } else { json!({"kind":"exit", "code":measured.exit_code}) },
                   "interrupt_signal": measured.interrupt_signal,
                   "stderr_preview": String::from_utf8_lossy(&preview)});
         if status != "ok" {
@@ -245,6 +287,26 @@ pub fn run_logged(
         Ok(row)
     };
     work().map_err(|e| e.to_string())
+}
+
+fn signal_name(signal: i32) -> Option<&'static str> {
+    match signal {
+        libc::SIGHUP => Some("SIGHUP"),
+        libc::SIGINT => Some("SIGINT"),
+        libc::SIGQUIT => Some("SIGQUIT"),
+        libc::SIGILL => Some("SIGILL"),
+        libc::SIGABRT => Some("SIGABRT"),
+        libc::SIGFPE => Some("SIGFPE"),
+        libc::SIGKILL => Some("SIGKILL"),
+        libc::SIGSEGV => Some("SIGSEGV"),
+        libc::SIGPIPE => Some("SIGPIPE"),
+        libc::SIGALRM => Some("SIGALRM"),
+        libc::SIGTERM => Some("SIGTERM"),
+        libc::SIGBUS => Some("SIGBUS"),
+        libc::SIGUSR1 => Some("SIGUSR1"),
+        libc::SIGUSR2 => Some("SIGUSR2"),
+        _ => None,
+    }
 }
 
 pub(crate) fn display_command(command: &[OsString]) -> Vec<String> {

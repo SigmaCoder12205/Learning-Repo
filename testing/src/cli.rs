@@ -1,7 +1,14 @@
 //! Shared command-line options for single workloads and suite entries.
 use crate::report::View;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::{ffi::OsString, path::PathBuf};
+#[derive(Subcommand, Debug, Clone)]
+pub(crate) enum Command {
+    /// Keycloak accounts and persistent CLI sessions
+    Account(crate::accounts::Options),
+    /// List saved runs, inspect reports, and pin named baselines
+    History(crate::history::Options),
+}
 fn positive(s: &str) -> Result<f64, String> {
     let n: f64 = s.parse().map_err(|_| "expected a number")?;
     if n.is_finite() && n > 0.0 {
@@ -20,7 +27,7 @@ fn positive(s: &str) -> Result<f64, String> {
 )]
 pub(crate) struct Cli {
     #[command(subcommand)]
-    pub(crate) command: Option<crate::accounts::Command>,
+    pub(crate) command: Option<Command>,
     /// Executable or Python .py script to benchmark
     #[arg(conflicts_with_all = ["executable", "source", "python"])]
     pub(crate) program: Option<PathBuf>,
@@ -39,6 +46,12 @@ pub(crate) struct Cli {
     /// Repeatable interpreter option before the script, e.g. --python-arg=-O
     #[arg(long, allow_hyphen_values = true, value_name = "OPTION")]
     pub(crate) python_arg: Vec<OsString>,
+    /// Separately measure an empty Python script; full-process metrics stay unchanged
+    #[arg(long)]
+    pub(crate) python_overhead: bool,
+    /// Number of empty-script calibration measurements after one calibration warmup
+    #[arg(long, default_value = "5", requires = "python_overhead", value_parser = clap::value_parser!(u32).range(1..=1000))]
+    pub(crate) overhead_runs: u32,
     #[arg(long, default_value = "g++")]
     pub(crate) compiler: PathBuf,
     #[arg(long = "std", default_value = "c++17")]
@@ -55,6 +68,9 @@ pub(crate) struct Cli {
     pub(crate) runs: u32,
     #[arg(long, default_value = "1")]
     pub(crate) warmup: u32,
+    /// Pause between warmup/measured invocations, outside measured time (0..60000 ms)
+    #[arg(long, default_value = "0", value_parser = clap::value_parser!(u64).range(0..=60000))]
+    pub(crate) cooldown_ms: u64,
     /// Deadline in seconds per invocation
     #[arg(long, default_value = "10", value_parser = positive)]
     pub(crate) timeout: f64,
@@ -87,6 +103,9 @@ pub(crate) struct Cli {
     /// Show all statistics, configuration, and individual runs
     #[arg(long, conflicts_with_all = ["intermediate", "view"])]
     pub(crate) advanced: bool,
+    /// Add an ASCII wall-time histogram to text and HTML reports
+    #[arg(long)]
+    pub(crate) histogram: bool,
     #[arg(long)]
     pub(crate) list_metrics: bool,
     #[arg(long, default_value = "text", value_parser = ["text", "json", "csv", "html"])]
@@ -138,13 +157,25 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) save_baseline: Option<PathBuf>,
     /// Compare against a saved JSON report
-    #[arg(long)]
+    #[arg(long, group = "baseline")]
     pub(crate) compare: Option<PathBuf>,
+    /// Compare against an immutable named baseline from local history
+    #[arg(long, group = "baseline")]
+    pub(crate) compare_pin: Option<String>,
+    /// Save this report in private local history (opt-in)
+    #[arg(long)]
+    pub(crate) record_history: bool,
+    /// History location (default: $XDG_DATA_HOME/bench/history or ~/.local/share/bench/history)
+    #[arg(long)]
+    pub(crate) history_dir: Option<PathBuf>,
     /// Allowed worsening, e.g. --regression wall=5 --regression rss=10
-    #[arg(long, requires = "compare")]
+    #[arg(long, requires = "baseline")]
     pub(crate) regression: Vec<String>,
+    /// Warn on worsening without exit code 3, e.g. --warn-regression wall=5
+    #[arg(long, requires = "baseline")]
+    pub(crate) warn_regression: Vec<String>,
     /// Compare despite different workloads/hosts (differences remain visible)
-    #[arg(long, requires = "compare")]
+    #[arg(long, requires = "baseline")]
     pub(crate) allow_mismatch: bool,
     /// Extend measurements until the relative precision target is reached
     #[arg(long)]

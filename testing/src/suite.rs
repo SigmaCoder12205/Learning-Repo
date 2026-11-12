@@ -31,6 +31,13 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
             .ok_or("defaults must be an object")?
             .clone()
     };
+    // Validate before merging so case overrides cannot hide malformed defaults.
+    if let Some(env) = defaults.get("env") {
+        let env = env.as_object().ok_or("defaults.env must be an object")?;
+        if env.values().any(|value| !value.is_string()) {
+            return Err("defaults.env values must be strings".into());
+        }
+    }
     let cases = doc["benchmarks"]
         .as_array()
         .filter(|v| !v.is_empty())
@@ -130,8 +137,8 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                     argv.push(flag.into());
                     argv.push(p.into_os_string());
                 }
-                "adaptive" | "perf" | "gpu" | "heaptrack" | "valgrind" | "hotspots"
-                | "all_tools" | "keep_going" => {
+                "python_overhead" | "adaptive" | "perf" | "gpu" | "heaptrack" | "valgrind"
+                | "hotspots" | "all_tools" | "keep_going" => {
                     if value
                         .as_bool()
                         .ok_or("tool and mode flags must be booleans")?
@@ -139,9 +146,10 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                         argv.push(flag.into());
                     }
                 }
-                "name" | "runs" | "warmup" | "timeout" | "output_limit" | "expect_exit"
-                | "units" | "metrics" | "max_runs" | "precision" | "min_time" | "cpu_affinity"
-                | "diagnostic_timeout" | "perf_events" | "gpu_interval_ms" | "gpu_device" => {
+                "cooldown_ms" | "overhead_runs" | "name" | "runs" | "warmup" | "timeout"
+                | "output_limit" | "expect_exit" | "units" | "metrics" | "max_runs"
+                | "precision" | "min_time" | "cpu_affinity" | "diagnostic_timeout"
+                | "perf_events" | "gpu_interval_ms" | "gpu_device" => {
                     if !value.is_string() && !value.is_number() {
                         return Err(format!("invalid value for {key}"));
                     }

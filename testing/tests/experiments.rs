@@ -89,6 +89,38 @@ fn suites_resolve_relative_paths_merge_environment_and_preflight_all_cases() {
 }
 
 #[test]
+fn suites_reject_invalid_default_environment_before_case_overrides() {
+    let dir = tempfile::tempdir().unwrap();
+    let suite = dir.path().join("suite.json");
+    let marker = dir.path().join("marker");
+    for invalid in [
+        json!(null),
+        json!([]),
+        json!("FIRST=base"),
+        json!({"FIRST": 7}),
+    ] {
+        let config = json!({
+            "version": 1,
+            "defaults": {"runs": 1, "warmup": 0, "env": invalid},
+            "benchmarks": [{
+                "name": "overridden",
+                "executable": "/bin/sh",
+                "env": {"FIRST": "case"},
+                "args": ["-c", "touch \"$1\"", "bench-test", marker]
+            }]
+        });
+        fs::write(&suite, config.to_string()).unwrap();
+        let output = bench(&["--suite", path(&suite)]);
+        assert_eq!(output.status.code(), Some(2), "{invalid}: {output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("defaults.env"));
+        assert!(
+            !marker.exists(),
+            "invalid defaults must prevent target execution"
+        );
+    }
+}
+
+#[test]
 fn durable_recovery_handles_torn_tail_and_rejects_invalid_structure() {
     let dir = tempfile::tempdir().unwrap();
     let checkpoint = dir.path().join("runs.jsonl");

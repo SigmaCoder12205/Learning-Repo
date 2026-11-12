@@ -16,16 +16,18 @@ For narrower checks:
 
 ```bash
 make check                       # Rust formatting and Clippy
-make check-c                     # C measurement code and public telemetry header
+make check-c                     # C measurement code and both telemetry headers (C/C++)
 cargo test --locked --test cli    # Public CLI behavior
 cargo test --locked --test profiles
 cargo test --locked diagnostics::gpu
 cargo run --locked -- /bin/true --runs 2 --warmup 0
 ```
 
-`make install` installs the release binary, telemetry header, and profile/account/memory/Python guides under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
+`make install` installs the release binary, telemetry headers, and profile/account/memory/Python/feature guides and roadmap under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks; `CXX` selects the compiler for the C++17 header checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
 
 Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnostic sessions live in `bench-artifacts/` and are ignored at any directory depth, including suite-relative artifact directories. These directories can contain useful benchmark evidence; the development commands do not delete them. `.editorconfig` defines basic whitespace conventions; `cargo fmt` is authoritative for Rust formatting.
+
+Local Python environments named `.venv/`, bytecode files, and `__pycache__/` directories are ignored throughout the project. JSON and YAML files use two-space indentation.
 
 ## Code map
 
@@ -36,6 +38,9 @@ Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnos
 | `src/app.rs` | Mode selection, output destinations, comparisons, and final output |
 | `src/benchmark.rs` | Compile-once support, warmups, measured invocations, adaptive stopping, and diagnostic handoff |
 | `src/python.rs` | Script validation, interpreter lookup, virtual-environment path preservation, and target environment preparation |
+| `src/runtime.rs` | Bounded runtime-header detection and independent empty-script Python calibration |
+| `src/insights.rs` | Wall-time histograms, MAD spread, per-run outlier labels, and text/HTML explanations |
+| `src/history.rs` | Opt-in private report snapshots, history commands, and immutable named baseline pins |
 | `src/runner.rs` | Embedded helper, sealed request transport, C FFI ownership, output capture, and correctness checks |
 | `native/launcher.c` | Fresh C helper launch, signal forwarding, and result transport (its own resource usage is discarded) |
 | `native/helper.c` | Bounded versioned request decoding in a clean C address space |
@@ -95,6 +100,7 @@ Keep the parser independently testable. Add a small representative fixture under
 - `tests/diagnostics.rs` exercises tool wrappers with fake launchers and verifies replay isolation and cleanup.
 - `tests/experiments.rs` covers comparisons, suites, affinity, adaptive limits, HTML escaping, and recovery.
 - `tests/python.rs` covers Python invocation, input replay, virtual environments, failures, mixed suites, and comparison provenance.
+- `tests/features.rs` covers runtime/termination metadata, histograms, startup calibration isolation/failures/interruption, cooldowns, history privacy/pins, advisory thresholds, suites, and recovery.
 - `tests/profiles.rs` covers domain selection, telemetry, networking fixtures, profile regression gates, and the public header in C/C++.
 
 For structural changes, preserve CLI help, the profile catalog, serialized field names, and exit behavior. Existing integration tests provide the main behavior checks; add tests for new behavior or uncovered failures rather than mirroring private implementation details. Real profiler smoke checks complement fixtures when changing a tool integration, but should stay optional for contributors without the hardware or permissions.

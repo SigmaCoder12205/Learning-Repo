@@ -120,6 +120,7 @@ pub(crate) fn execute(
         )?
     };
     let mut provenance = experiment::provenance(&binary, input.as_deref(), &env)?;
+    let runtime = crate::runtime::detect(&binary, python.as_ref());
     let python_info = if let Some(python) = &python {
         provenance["script_sha256"] = json!(experiment::hash_file(&python.script)?);
         json!({"script": python.script, "interpreter": python.interpreter, "interpreter_args": display_command(&args.python_arg),
@@ -157,12 +158,12 @@ pub(crate) fn execute(
     let mut report = json!({"schema_version":3,"tool_version":env!("CARGO_PKG_VERSION"),"name":name,
         "implementation":"Rust CLI with isolated C process measurement", "measurement_backend":runner::BACKEND,
         "memory_accounting":{"source":"Linux wait4 ru_maxrss","unit":"KiB","scope":"Peak resident memory over the target child lifetime, including C launch setup, runtime mappings and waited-for descendants; not simultaneous process-tree RSS, heap allocations or executable section size"},
-        "command":display_command(&command),"provenance":provenance,"python":python_info,
+        "command":display_command(&command),"provenance":provenance,"python":python_info,"runtime":runtime,
         "host":{"system":std::env::consts::OS,"machine":std::env::consts::ARCH,"logical_cpus":std::thread::available_parallelism().map(|n|n.get()).ok()},
         "settings":{"runs":args.runs,"warmup":args.warmup,"timeout_seconds":args.timeout,"cwd":cwd,"work_units":args.units,
             "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":input,"expected_output":expected,
             "environment_override_keys":env_keys,"cpu_affinity":affinity,"adaptive":args.adaptive,"max_runs":args.max_runs,
-            "precision_percent":args.precision,"min_time_seconds":args.min_time},
+            "precision_percent":args.precision,"min_time_seconds":args.min_time,"cooldown_ms":args.cooldown_ms},
         "compilation":compilation,"custom_metrics":args.metrics.is_some(),"selected_metrics":selected.iter().map(|&i|METRICS[i].0).collect::<Vec<_>>(),
         "metric_units":selected.iter().map(|&i|(METRICS[i].0,METRICS[i].1)).collect::<BTreeMap<_,_>>(),
         "warmups":[],"runs":[],"summary":{},"successful_runs":0,"warnings":[],"interrupt_signal":0,
@@ -180,11 +181,23 @@ pub(crate) fn execute(
     let started = std::time::Instant::now();
     let mut cancelled = 0;
     let mut stop_reason = "fixed_runs";
+    let mut invocations = 0;
     for (phase, count) in [("warmups", args.warmup), ("runs", limit)] {
         if args.progress {
             eprintln!("bench [{name}]: starting {phase}, limit {count}");
         }
         for index in 0..count {
+            if invocations > 0 && args.cooldown_ms > 0 {
+                if args.progress {
+                    eprintln!("bench [{name}]: cooldown {} ms", args.cooldown_ms);
+                }
+                cancelled = runner::cooldown(args.cooldown_ms)? as i64;
+                if cancelled != 0 {
+                    stop_reason = "interrupted";
+                    break;
+                }
+            }
+            invocations += 1;
             let mut row = runner::run(&command, &opts, &collect)?;
             let wall = row["metrics"]["wall"]
                 .as_f64()
@@ -283,7 +296,25 @@ pub(crate) fn execute(
     report["measurement_passed"] = json!(passed);
     report["interrupt_signal"] = json!(cancelled);
     journal.emit(json!({"event":"report","report":report}))?; // Preserve baseline before expensive diagnostics.
-    let diagnostics = diagnostics::execute(args, &command, &opts, passed)?;
+    if args.python_overhead {
+        report["python_overhead"] = if passed {
+            crate::runtime::calibrate(args, python.as_ref().unwrap(), &opts, &report)
+                .unwrap_or_else(
+                    |reason| json!({"status":"unavailable","failed":true,"reason":reason}),
+                )
+        } else {
+            json!({"status":"skipped","failed":true,"reason":"baseline did not complete successfully"})
+        };
+        if let Some(signal) = report["python_overhead"]["interrupt_signal"]
+            .as_i64()
+            .filter(|s| *s != 0)
+        {
+            cancelled = signal;
+        }
+        report["interrupt_signal"] = json!(cancelled);
+        journal.emit(json!({"event":"report","report":report}))?;
+    }
+    let diagnostics = diagnostics::execute(args, &command, &opts, passed && cancelled == 0)?;
     if let Some(signal) = diagnostics["interrupt_signal"].as_i64().filter(|s| *s != 0) {
         cancelled = signal;
     }

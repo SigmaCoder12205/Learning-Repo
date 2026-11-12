@@ -313,6 +313,16 @@ pub fn render(
                     "{} #{}: {} (exit {})",
                     phase, row["run"], row["status"], row["exit_code"]
                 );
+                if row["termination"]["kind"] == "signal" {
+                    let _ = writeln!(
+                        out,
+                        "Terminated by {} (signal {}).",
+                        row["termination"]["name"]
+                            .as_str()
+                            .unwrap_or("an unnamed signal"),
+                        row["termination"]["signal"]
+                    );
+                }
                 if row["status"] == "output_limit" {
                     if let (Some(stdout), Some(stderr), Some(limit)) = (
                         row["captured_output"]["stdout_bytes"].as_f64(),
@@ -363,6 +373,7 @@ pub fn render(
     for warning in report["warnings"].as_array().unwrap() {
         let _ = writeln!(out, "Note: {}", warning.as_str().unwrap());
     }
+    out.push_str(&crate::insights::render(report));
     render_diagnostics(&mut out, report, view);
     out.push_str(&crate::profiles::render(report, view != View::Simple));
     if report["comparison"].is_object() {

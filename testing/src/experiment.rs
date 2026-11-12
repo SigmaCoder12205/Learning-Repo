@@ -105,6 +105,7 @@ pub fn refresh(report: &mut Value) {
     let count = good.len();
     report["summary"] = Value::Object(summary);
     report["successful_runs"] = json!(count);
+    crate::insights::refresh(report);
 }
 pub fn validate(args: &Cli) -> Result<(), String> {
     if args.require_profile_data && args.profile_flags.is_empty() {

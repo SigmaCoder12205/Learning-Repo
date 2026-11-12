@@ -114,6 +114,10 @@ fn section(report: &Value) -> String {
         );
     }
     out.push_str("</div>");
+    let insights = crate::insights::render(report);
+    if !insights.is_empty() {
+        let _ = write!(out, "<details open><summary>Runtime and measurement insights</summary><pre>{}</pre></details>", escape(&insights));
+    }
     if let Some((name, _)) = busiest {
         let _ = write!(out, "<p class=muted>GPU card: highest mean engine activity ({}), from a separate replay. All engines are listed in the full results.</p>", escape(name));
     }

@@ -74,3 +74,7 @@ if destination:
 ```
 
 Supply actual application measurements for those variables. `bench workload.py --backend --api` collects that replay separately from baseline statistics. Supported keys, units, limits, and subflags are documented in [domain profiles](profiles.md).
+
+## Python startup estimates in 0.11
+
+Use `bench workload.py --python-overhead --overhead-runs 5` for a separate empty-script startup calibration. Full-process timing and memory remain unchanged; this is an estimate rather than exact isolation of interpreter overhead. See the [runtime insights guide](features.md#python-startup-calibration) for supported options, sample scope, and limitations.
