@@ -5,35 +5,64 @@ where you don't know the data type
 
 Code example 
 
+
 #include <iostream>
 #include <string>
+#include <variant>
 #include <sstream>
+#include <cctype> // Good practice to include for std::isdigit
+
+using DynamicValue = std::variant<int, double, char, std::string>;
+
+DynamicValue parseInput(const std::string& input) {
+    if (input.length() == 1 && !std::isdigit(static_cast<unsigned char>(input[0]))) {
+        return input[0];
+    }
+
+    std::istringstream intStream(input);
+    int intVal;
+    if ((intStream >> intVal) && (intStream >> std::ws).eof()) {
+        return intVal;
+    }
+
+    std::istringstream doubleStream(input);
+    double doubleVal;
+    if ((doubleStream >> doubleVal) && (doubleStream >> std::ws).eof()) {
+        return doubleVal;
+    }
+
+    return input;
+}
 
 int main() {
-    std::string input;
-    std::cout << "Enter something: ";
-    std::cin >> input; // Or use std::getline(std::cin, input) for spaces
+    std::string rawInput;
+    std::cout << "Enter anything: ";
+    std::getline(std::cin, rawInput);
 
-    // Check if it's an integer
-    std::stringstream ss(input);
-    int intValue;
-    if (ss >> intValue && ss.eof()) {
-        std::cout << "Detected type: Integer (" << intValue << ")\n";
-        return 0;
+    DynamicValue value = parseInput(rawInput);
+
+    // Check which type was stored and extract it
+    if (std::holds_alternative<int>(value)) {
+        int myInt = std::get<int>(value);
+        std::cout << "It is an int: " << myInt << '\n';
+    } 
+    else if (std::holds_alternative<double>(value)) {
+        double myDouble = std::get<double>(value);
+        std::cout << "It is a double: " << myDouble << '\n';
+    } 
+    else if (std::holds_alternative<char>(value)) {
+        char myChar = std::get<char>(value);
+        std::cout << "It is a char: " << myChar << '\n';
+    } 
+    else if (std::holds_alternative<std::string>(value)) {
+        std::string myString = std::get<std::string>(value);
+        std::cout << "It is a string: " << myString << '\n';
     }
 
-    // Reset stream to check if it's a double
-    ss.clear();
-    ss.str(input);
-    double doubleValue;
-    if (ss >> doubleValue && ss.eof()) {
-        std::cout << "Detected type: Double/Float (" << doubleValue << ")\n";
-        return 0;
-    }
-
-    // Fallback: It remains a string
-    std::cout << "Detected type: String (" << input << ")\n";
+    return 0;
 }
+
+
 ------------------------------------------------------------------------------------------------------------------------------------------
 
 how to clear input buffer in C++
@@ -79,3 +108,12 @@ how to compile C++ the best way
 
 g++ -std=c++20 -Wall -Wextra -O2
 main.cpp -o program
+
+------------------------------------------------------------------------------------------------------------------------------------------
+how to make a character uppercase 
+
+char ch = 'a';
+
+char upper_ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+
+include #include <cctype>
