@@ -73,7 +73,7 @@ int main(){
             
             // Write the check for if it's not equal to C, K, F
 
-            if(upper_temp_type != 'C' || upper_temp_type != 'K' || upper_temp_type != 'F'){
+            if(upper_temp_type != 'C' && upper_temp_type != 'K' && upper_temp_type != 'F'){
                 std::cout << "Can only enter C, K or F" << std::endl;
                 continue;
             }
@@ -84,17 +84,18 @@ int main(){
             temp_type = char_val1;
             upper_temp_type = static_cast<char>(std::toupper(static_cast<unsigned char>(temp_type)));
 
-            if(upper_temp_type != 'C' || upper_temp_type != 'K' || upper_temp_type != 'F'){
+            if(upper_temp_type != 'C' && upper_temp_type != 'K' && upper_temp_type != 'F'){
                 std::cout << "Can only enter C, K or F" << std::endl;
                 continue;
             }
             break;
+           
         }
 
     }
 
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     while(true){
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         if(upper_temp_type == 'C' || upper_temp_type == 'K' || upper_temp_type == 'F'){
             std::string raw;
             std::cout << "Enter the temperature: ";
