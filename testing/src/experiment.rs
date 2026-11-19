@@ -106,8 +106,11 @@ pub fn refresh(report: &mut Value) {
     report["summary"] = Value::Object(summary);
     report["successful_runs"] = json!(count);
     crate::insights::refresh(report);
+    crate::correctness::refresh(report);
 }
 pub fn validate(args: &Cli) -> Result<(), String> {
+    crate::inputs::validate(args)?;
+    crate::correctness::validate(args)?;
     if args.require_profile_data && args.profile_flags.is_empty() {
         return Err("--require-profile-data needs a domain profile; use --list-profiles".into());
     }

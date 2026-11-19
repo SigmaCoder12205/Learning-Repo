@@ -104,6 +104,7 @@ pub(crate) fn calibrate(
         env: base.env,
         input: None,
         expected: None,
+        checks: Default::default(),
         expected_exit: 0,
         timeout: base.timeout,
         output_limit: base.output_limit,

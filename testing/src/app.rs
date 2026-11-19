@@ -13,6 +13,25 @@ use std::{
     io::Write as _,
     path::{Path, PathBuf},
 };
+fn validate_mode(
+    command: &clap::Command,
+    matches: &clap::ArgMatches,
+    allowed: &[&str],
+    error: impl Fn(&str) -> String,
+) -> Result<(), String> {
+    for id in matches
+        .ids()
+        .filter(|id| command.get_arguments().any(|arg| arg.get_id() == *id))
+    {
+        if matches.value_source(id.as_str()) == Some(clap::parser::ValueSource::CommandLine)
+            && !allowed.contains(&id.as_str())
+        {
+            return Err(error(&id.as_str().replace('_', "-")));
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn run() -> Result<i32, String> {
     use clap::FromArgMatches;
     let command = profiles::command();
@@ -25,6 +44,79 @@ pub(crate) fn run() -> Result<i32, String> {
         };
     }
     args.profile_flags = profiles::selection(&matches);
+    if (args.list_cases || !args.case.is_empty()) && args.suite.is_none() {
+        return Err("--case and --list-cases require --suite FILE".into());
+    }
+    if args.discover_inputs {
+        if !["text", "json"].contains(&args.format.as_str()) {
+            return Err("--discover-inputs supports text or json".into());
+        }
+        let allowed = [
+            "program",
+            "executable",
+            "source",
+            "python",
+            "input_source",
+            "discover_inputs",
+            "format",
+            "output",
+            "args",
+        ];
+        validate_mode(&command, &matches, &allowed, |flag| {
+            format!("--{flag} does not apply to --discover-inputs")
+        })?;
+        if crate::input_hints::source_paths(&args).is_empty()
+            && args.program.is_none()
+            && args.executable.is_none()
+        {
+            return Err("provide a target or --input-source FILE".into());
+        }
+        let discovery = crate::input_hints::discover(&args)?;
+        let output = if args.format == "json" {
+            serde_json::to_string_pretty(&discovery).unwrap() + "\n"
+        } else {
+            crate::input_hints::render(&discovery)
+        };
+        if let Some(path) = &args.output {
+            std::fs::write(path, output).map_err(|e| e.to_string())?;
+        } else {
+            print!("{output}");
+        }
+        return Ok(0);
+    }
+    if args.list_cases {
+        validate_mode(
+            &command,
+            &matches,
+            &["suite", "case", "list_cases", "format", "output"],
+            |flag| format!("--{flag} does not apply to --list-cases"),
+        )?;
+        if !["text", "json"].contains(&args.format.as_str()) {
+            return Err("--list-cases supports text or json".into());
+        }
+        let names: Vec<_> = suite::selected(&args)?
+            .into_iter()
+            .map(|p| p.name.unwrap())
+            .collect();
+        let output = if args.format == "json" {
+            serde_json::to_string_pretty(
+                &json!({"kind":"suite_listing","suite_file":args.suite,"cases":names}),
+            )
+            .unwrap()
+                + "\n"
+        } else {
+            names
+                .iter()
+                .map(|name| format!("{name:?}\n"))
+                .collect::<String>()
+        };
+        if let Some(path) = &args.output {
+            std::fs::write(path, output).map_err(|e| e.to_string())?;
+        } else {
+            print!("{output}");
+        }
+        return Ok(0);
+    }
     if args.list_profiles {
         let output = if args.format == "json" {
             serde_json::to_string_pretty(&profiles::catalog_json()).unwrap() + "\n"
@@ -48,6 +140,7 @@ pub(crate) fn run() -> Result<i32, String> {
     if args.suite.is_some() {
         let allowed = [
             "suite",
+            "case",
             "format",
             "output",
             "progress",
@@ -67,19 +160,9 @@ pub(crate) fn run() -> Result<i32, String> {
             "help",
             "version",
         ];
-        for id in matches
-            .ids()
-            .filter(|id| command.get_arguments().any(|arg| arg.get_id() == *id))
-        {
-            if matches.value_source(id.as_str()) == Some(clap::parser::ValueSource::CommandLine)
-                && !allowed.contains(&id.as_str())
-            {
-                return Err(format!(
-                    "put --{} inside the suite's defaults or benchmark entry",
-                    id.as_str().replace('_', "-")
-                ));
-            }
-        }
+        validate_mode(&command, &matches, &allowed, |flag| {
+            format!("put --{flag} inside the suite's defaults or benchmark entry")
+        })?;
     }
     if args.recover.is_some() || args.check_tools {
         let allowed = if args.check_tools {
@@ -103,19 +186,9 @@ pub(crate) fn run() -> Result<i32, String> {
                 "warn_regression",
             ]
         };
-        for id in matches
-            .ids()
-            .filter(|id| command.get_arguments().any(|arg| arg.get_id() == *id))
-        {
-            if matches.value_source(id.as_str()) == Some(clap::parser::ValueSource::CommandLine)
-                && !allowed.contains(&id.as_str())
-            {
-                return Err(format!(
-                    "--{} does not apply to this mode",
-                    id.as_str().replace('_', "-")
-                ));
-            }
-        }
+        validate_mode(&command, &matches, &allowed, |flag| {
+            format!("--{flag} does not apply to this mode")
+        })?;
         if args.check_tools && !["text", "json"].contains(&args.format.as_str()) {
             return Err("--check-tools supports text or json output".into());
         }

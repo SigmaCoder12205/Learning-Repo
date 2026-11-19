@@ -23,7 +23,7 @@ cargo test --locked diagnostics::gpu
 cargo run --locked -- /bin/true --runs 2 --warmup 0
 ```
 
-`make install` installs the release binary, telemetry headers, and profile/account/memory/Python/feature guides and roadmap under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks; `CXX` selects the compiler for the C++17 header checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
+`make install` installs the release binary, telemetry headers, and profile/account/memory/Python/feature/input/correctness guides and roadmap under `~/.local` by default. `PREFIX` and `DESTDIR` retain their usual meanings. `CC` selects the compiler for the C checks; `CXX` selects the compiler for the C++17 header checks. Keep dependency changes deliberate and update `Cargo.lock` when dependencies change.
 
 Generated executables belong in `build/`. Cargo outputs go in `target/`. Diagnostic sessions live in `bench-artifacts/` and are ignored at any directory depth, including suite-relative artifact directories. These directories can contain useful benchmark evidence; the development commands do not delete them. `.editorconfig` defines basic whitespace conventions; `cargo fmt` is authoritative for Rust formatting.
 
@@ -37,10 +37,13 @@ Local Python environments named `.venv/`, bytecode files, and `__pycache__/` dir
 | `src/cli.rs` | Shared CLI option definitions and value parsing |
 | `src/app.rs` | Mode selection, output destinations, comparisons, and final output |
 | `src/benchmark.rs` | Compile-once support, warmups, measured invocations, adaptive stopping, and diagnostic handoff |
+| `src/inputs.rs`, `src/input_hints.rs`, `src/interactive.rs` | Inline/captured replay, bounded case generation, heuristic source/prompt hints, terminal-trial FFI |
+| `native/interactive.c`, `native/interactive.h` | Unmeasured PTY capture, deadlines, signals, and process-group cleanup (links libutil) |
 | `src/python.rs` | Script validation, interpreter lookup, virtual-environment path preservation, and target environment preparation |
 | `src/runtime.rs` | Bounded runtime-header detection and independent empty-script Python calibration |
 | `src/insights.rs` | Wall-time histograms, MAD spread, per-run outlier labels, and text/HTML explanations |
 | `src/history.rs` | Opt-in private report snapshots, history commands, and immutable named baseline pins |
+| `src/correctness.rs` | Streaming exact/substring output assertions, expectation hashes, measured-output repeatability, and presentation |
 | `src/runner.rs` | Embedded helper, sealed request transport, C FFI ownership, output capture, and correctness checks |
 | `native/launcher.c` | Fresh C helper launch, signal forwarding, and result transport (its own resource usage is discarded) |
 | `native/helper.c` | Bounded versioned request decoding in a clean C address space |
@@ -68,7 +71,7 @@ Local Python environments named `.venv/`, bytecode files, and `__pycache__/` dir
 ## Execution flow and boundaries
 
 1. The application parses options, validates mode restrictions and destinations, and loads any comparison baseline.
-2. A single experiment resolves or compiles its target. Suites validate their entries first, then use the same experiment implementation for each case.
+2. A single experiment resolves or compiles its target, discovers input hints, and prepares inline or recorded replay. An optional terminal trial is unmeasured; it precedes case generation. Input matrices compile once and execute sequentially through the suite machinery. Suites validate their entries first and never automatically capture terminal input.
 3. The runner serializes a versioned request (little-endian scalar fields and length-prefixed NUL-terminated byte strings), seals it in a memfd, and launches the embedded C helper through the C FFI. The helper decodes it and supervises a fresh target child. Only that child's usage is reported; helper startup/transport are outside measured time. Rust owns descriptors and result storage until the synchronous call returns. C signal handling is process-wide; do not parallelize target invocations inside this process without redesigning that boundary.
 4. Warmups and measured runs receive correctness checks. Only successful measured runs enter baseline summaries. Journaling happens outside measured execution time.
 5. Optional tools and telemetry execute as separate replays. They retain their own artifacts and never enter baseline timing/resource aggregates.
@@ -100,6 +103,8 @@ Keep the parser independently testable. Add a small representative fixture under
 - `tests/diagnostics.rs` exercises tool wrappers with fake launchers and verifies replay isolation and cleanup.
 - `tests/experiments.rs` covers comparisons, suites, affinity, adaptive limits, HTML escaping, and recovery.
 - `tests/python.rs` covers Python invocation, input replay, virtual environments, failures, mixed suites, and comparison provenance.
+- `tests/correctness.rs` covers full/binary stdout assertions, buffer boundaries, repeated-output changes, warmup/stderr exclusions, per-case stability, history/recovery/HTML, expectation compatibility, suite listing/selection/preflight, and input-hint regressions. Diagnostic tests also verify assertion forwarding and auxiliary-command exemptions.
+- `tests/inputs.rs` covers source discovery without execution, inline stdin, variation preflight, native/Python PTY capture, EOF/signals/deadlines/output limits/descendant cleanup, diagnostic replay, matrices, history, and recovery. The Python PTY driver is test tooling, not an engine dependency.
 - `tests/features.rs` covers runtime/termination metadata, histograms, startup calibration isolation/failures/interruption, cooldowns, history privacy/pins, advisory thresholds, suites, and recovery.
 - `tests/profiles.rs` covers domain selection, telemetry, networking fixtures, profile regression gates, and the public header in C/C++.
 
@@ -114,3 +119,7 @@ Keycloak owns all account/password logic; keep the Rust account module a protoco
 ## Measurement helper
 
 `build.rs` compiles the target-platform helper executable and embeds its bytes through `include_bytes!`. It also links the small launcher FFI library. `native/measure.h` defines both the Rust-facing result layout and the helper reply. Keep protocol encoding in `runner.rs` and decoding in `helper.c` in agreement, incrementing the request version if its layout changes. The helper executes with a clean environment; the original target environment travels in the sealed request, not in argv. Preserve early INT/TERM handling across exec, propagation to the target, and cleanup/reaping. See [memory accounting](memory.md) for the residual C pre-exec footprint and waited-child scope. Changing this backend requires a new measurement provenance identifier and compatibility checks.
+
+The interactive supervisor is separate from the measurement helper. It forks only for an unmeasured trial and calls Rust synchronously from the supervising parent. Do not route timed runs through it or change the isolated C measurement backend for terminal capture. Its signal handlers also require sequential execution.
+
+Output assertions run after native measurement. Keep `RunOptions.checks` disabled for compilation, tool probes/analysis, Python startup calibration, and heaptrack mixed stdout. Target-preserving diagnostic replays inherit assertions but do not participate in measured-output stability. Suite listing/selection shares full preflight and never relaxes comparison membership rules.

@@ -24,6 +24,7 @@ pub(super) fn run(target: &[OsString], opts: &RunOptions<'_>, dir: &Path) -> Res
     command.extend_from_slice(target);
     let recording_options = RunOptions {
         expected: None,
+        checks: Default::default(),
         ..*opts
     };
     let row = command_run(&command, &recording_options, dir, "heaptrack")?;
@@ -58,6 +59,7 @@ pub(super) fn run(target: &[OsString], opts: &RunOptions<'_>, dir: &Path) -> Res
     let analysis_options = RunOptions {
         input: None,
         expected: None,
+        checks: Default::default(),
         expected_exit: 0,
         ..*opts
     };

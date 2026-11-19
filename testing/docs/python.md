@@ -78,3 +78,7 @@ Supply actual application measurements for those variables. `bench workload.py -
 ## Python startup estimates in 0.11
 
 Use `bench workload.py --python-overhead --overhead-runs 5` for a separate empty-script startup calibration. Full-process timing and memory remain unchanged; this is an estimate rather than exact isolation of interpreter overhead. See the [runtime insights guide](features.md#python-startup-calibration) for supported options, sample scope, and limitations.
+
+## Input prompts and argument cases in 0.12
+
+Bench recognizes common `input()`, numeric conversions, argparse choices, and direct `sys.argv` patterns as input hints. In a terminal, run `bench script.py` and answer once; every benchmark invocation replays the answers without human response time. Use `--input-line` or `--input-text` for inline answers, `--discover-inputs` to inspect hints without executing the script, and `--explore-inputs` or explicit variations for separate case results. See [the input guide](inputs.md) for limits and examples. `--non-interactive` preserves immediate EOF when no stdin is supplied.

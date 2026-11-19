@@ -45,7 +45,7 @@ pub(crate) fn execute(
     if !(args.output_limit * 1048576.0).is_finite() {
         return Err("--output-limit is too large".into());
     }
-    let input = args.input.as_deref().map(resolve).transpose()?;
+    let mut input = args.input.as_deref().map(resolve).transpose()?;
     let expected = args.expect_output.as_deref().map(resolve).transpose()?;
     for path in [&input, &expected].into_iter().flatten() {
         if !path.is_file() {
@@ -61,7 +61,7 @@ pub(crate) fn execute(
     let python = crate::python::prepare(args, &env)?;
     let affinity = experiment::affinity(args.cpu_affinity.as_deref())?;
     let build_dir = tempfile::tempdir().map_err(|e| e.to_string())?;
-    let mut compilation = Value::Null;
+    let mut compilation = args.prepared_compilation.clone().unwrap_or(Value::Null);
     let binary = if let Some(python) = &python {
         python.interpreter.clone()
     } else if !args.source.is_empty() {
@@ -86,6 +86,7 @@ pub(crate) fn execute(
                 env: &env,
                 input: None,
                 expected: None,
+                checks: Default::default(),
                 expected_exit: 0,
                 timeout: args.compile_timeout,
                 output_limit: 16.0 * 1048576.0,
@@ -119,10 +120,8 @@ pub(crate) fn execute(
             )?,
         )?
     };
-    let mut provenance = experiment::provenance(&binary, input.as_deref(), &env)?;
     let runtime = crate::runtime::detect(&binary, python.as_ref());
     let python_info = if let Some(python) = &python {
-        provenance["script_sha256"] = json!(experiment::hash_file(&python.script)?);
         json!({"script": python.script, "interpreter": python.interpreter, "interpreter_args": display_command(&args.python_arg),
             "measurement_scope": "Full interpreter process including startup, imports, script execution, and shutdown"})
     } else {
@@ -138,17 +137,45 @@ pub(crate) fn execute(
             .to_string_lossy()
             .into_owned()
     });
-    let mut command = vec![binary.into_os_string()];
+    let mut command = vec![binary.clone().into_os_string()];
     if let Some(python) = &python {
         command.extend(args.python_arg.clone());
         command.push(python.script.clone().into_os_string());
     }
     command.extend(args.args.clone());
+    let mut prepared = crate::inputs::prepare(args, &command, &env, &cwd)?;
+    if let Some(mut plans) = prepared.plans.take() {
+        for plan in &mut plans {
+            if !args.source.is_empty() {
+                if plan.input_source.is_none() {
+                    plan.input_source = args.source.first().cloned();
+                }
+                plan.source.clear();
+                plan.program = None;
+                plan.executable = Some(binary.clone());
+                plan.prepared_compilation = Some(compilation.clone());
+            }
+        }
+        return crate::suite::execute_plans(args, plans, journal, json!({
+            "input_matrix":{"method":if args.explore_inputs {"inferred examples, one field at a time"}else{"explicit Cartesian choices"},"max_cases":args.max_cases},
+            "input_discovery":prepared.discovery,"input_setup":prepared.trial
+        })).map(Outcome::Report);
+    }
+    if let Some(path) = prepared.path() {
+        input = Some(path);
+    }
+    let mut provenance = experiment::provenance(&binary, input.as_deref(), &env)?;
+    provenance["output_checks"] = crate::correctness::provenance(args, expected.as_deref())?;
+    if let Some(python) = &python {
+        provenance["script_sha256"] = json!(experiment::hash_file(&python.script)?);
+    }
+    let setup_failed = prepared.trial.is_object() && prepared.trial["status"] != "ok";
     let opts = runner::RunOptions {
         cwd: &cwd,
         env: &env,
         input: input.as_deref(),
         expected: expected.as_deref(),
+        checks: crate::correctness::Checks::from_args(args),
         expected_exit: args.expect_exit,
         timeout: args.timeout,
         output_limit: args.output_limit * 1048576.0,
@@ -161,11 +188,13 @@ pub(crate) fn execute(
         "command":display_command(&command),"provenance":provenance,"python":python_info,"runtime":runtime,
         "host":{"system":std::env::consts::OS,"machine":std::env::consts::ARCH,"logical_cpus":std::thread::available_parallelism().map(|n|n.get()).ok()},
         "settings":{"runs":args.runs,"warmup":args.warmup,"timeout_seconds":args.timeout,"cwd":cwd,"work_units":args.units,
-            "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":input,"expected_output":expected,
+            "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":if prepared.file.is_some(){None}else{input.as_ref()},"expected_output":expected,
             "environment_override_keys":env_keys,"cpu_affinity":affinity,"adaptive":args.adaptive,"max_runs":args.max_runs,
-            "precision_percent":args.precision,"min_time_seconds":args.min_time,"cooldown_ms":args.cooldown_ms},
+            "check_output_stability":args.check_output_stability,"precision_percent":args.precision,"min_time_seconds":args.min_time,"cooldown_ms":args.cooldown_ms},
+        "output_expectations":{"exact_text":args.expect_text,"contains":args.expect_contains},
         "compilation":compilation,"custom_metrics":args.metrics.is_some(),"selected_metrics":selected.iter().map(|&i|METRICS[i].0).collect::<Vec<_>>(),
         "metric_units":selected.iter().map(|&i|(METRICS[i].0,METRICS[i].1)).collect::<BTreeMap<_,_>>(),
+        "input_replay":prepared.info,"input_discovery":prepared.discovery,"input_setup":prepared.trial,"input_case":args.input_case,
         "warmups":[],"runs":[],"summary":{},"successful_runs":0,"warnings":[],"interrupt_signal":0,
         "completed":false,"measurement_passed":false,
         "diagnostics":{"results":{},"failed":false},
@@ -179,10 +208,19 @@ pub(crate) fn execute(
     let limit = if extended { args.max_runs } else { args.runs };
     let mut walls = Vec::new();
     let started = std::time::Instant::now();
-    let mut cancelled = 0;
-    let mut stop_reason = "fixed_runs";
+    let mut cancelled = report["input_setup"]["interrupt_signal"]
+        .as_i64()
+        .unwrap_or(0);
+    let mut stop_reason = if setup_failed {
+        "input_setup_failed"
+    } else {
+        "fixed_runs"
+    };
     let mut invocations = 0;
     for (phase, count) in [("warmups", args.warmup), ("runs", limit)] {
+        if setup_failed {
+            break;
+        }
         if args.progress {
             eprintln!("bench [{name}]: starting {phase}, limit {count}");
         }
@@ -198,7 +236,14 @@ pub(crate) fn execute(
                 }
             }
             invocations += 1;
-            let mut row = runner::run(&command, &opts, &collect)?;
+            let invocation_opts = runner::RunOptions {
+                checks: crate::correctness::Checks {
+                    fingerprint: args.check_output_stability && phase == "runs",
+                    ..opts.checks
+                },
+                ..opts
+            };
+            let mut row = runner::run(&command, &invocation_opts, &collect)?;
             let wall = row["metrics"]["wall"]
                 .as_f64()
                 .ok_or("invalid wall measurement")?;
@@ -271,8 +316,12 @@ pub(crate) fn execute(
             .iter()
             .any(|r| r["status"] != "ok")
     });
-    let passed = cancelled == 0 && !failed && walls.len() >= args.runs as usize;
+    let stable = !args.check_output_stability || report["output_stability"]["status"] == "stable";
+    let passed = cancelled == 0 && !failed && stable && walls.len() >= args.runs as usize;
     let warnings = report["warnings"].as_array_mut().unwrap();
+    if !stable {
+        warnings.push(json!("Output stability check failed or lacks two successful measured samples; timing samples are retained but the benchmark does not pass."));
+    }
     if failed {
         warnings.push(json!(
             "Failures are excluded from summary statistics; inspect individual run statuses."

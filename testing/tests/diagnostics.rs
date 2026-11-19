@@ -58,6 +58,7 @@ fn perf_replays_target_and_preserves_baseline_and_correctness() {
     let counter = dir.path().join("counter");
     let out = Command::new(env!("CARGO_BIN_EXE_bench"))
         .arg(&target)
+        .args(["--expect-contains=binary", "--check-output-stability"])
         .args([
             "--perf", "--warmup", "1", "--runs", "2", "--format", "json", "--input",
         ])
@@ -73,6 +74,11 @@ fn perf_replays_target_and_preserves_baseline_and_correctness() {
     assert!(out.status.success(), "{out:?}");
     let r = report(&out);
     assert_eq!(r["successful_runs"], 2);
+    assert_eq!(r["output_stability"]["status"], "stable");
+    assert_eq!(
+        r["diagnostics"]["results"]["perf"]["invocation"]["output_check"]["status"],
+        "passed"
+    );
     assert_eq!(r["summary"]["wall"]["count"], 2);
     assert_eq!(
         r["diagnostics"]["results"]["perf"]["instructions_per_cycle"],
@@ -166,11 +172,12 @@ shift
 output=$2
 shift 2
 printf trace > "$output.zst"
+printf 'heaptrack launcher banner\n'
 exec "$@"
 "#,
     );
     script(dir.path(), "heaptrack_print", "printf 'calls to allocation functions: 42 (10/s)\ntemporary memory allocations: 3 (1/s)\npeak heap memory consumption: 1.25M\ntotal memory leaked: 0B\n'");
-    let out = run(dir.path(), &["/bin/true", "--heaptrack"]);
+    let out = run(dir.path(), &["/bin/true", "--heaptrack", "--expect-text="]);
     assert!(out.status.success(), "{out:?}");
     let r = report(&out);
     let h = &r["diagnostics"]["results"]["heaptrack"];

@@ -96,6 +96,37 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                 }
+                "input_lines" | "expect_contains" => {
+                    for line in value
+                        .as_array()
+                        .ok_or("input_lines/expect_contains must be an array")?
+                    {
+                        argv.push(
+                            format!(
+                                "{}={}",
+                                if key == "input_lines" {
+                                    "--input-line"
+                                } else {
+                                    "--expect-contains"
+                                },
+                                line.as_str()
+                                    .ok_or("input_lines/expect_contains must contain strings")?
+                            )
+                            .into(),
+                        );
+                    }
+                }
+                "input_text" | "expect_text" => {
+                    argv.push(
+                        format!(
+                            "{flag}={}",
+                            value
+                                .as_str()
+                                .ok_or("input_text/expect_text must be a string")?
+                        )
+                        .into(),
+                    );
+                }
                 "env" => {
                     for (key, value) in value.as_object().ok_or("env must be an object")? {
                         argv.push("--env".into());
@@ -131,14 +162,23 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                         .into_os_string(),
                     );
                 }
-                "executable" | "python" | "cwd" | "input" | "expect_output" | "artifacts_dir" => {
+                "executable" | "python" | "cwd" | "input" | "input_source" | "expect_output"
+                | "artifacts_dir" => {
                     let p = PathBuf::from(value.as_str().ok_or("paths must be strings")?);
                     let p = if p.is_absolute() { p } else { root.join(p) };
                     argv.push(flag.into());
                     argv.push(p.into_os_string());
                 }
-                "python_overhead" | "adaptive" | "perf" | "gpu" | "heaptrack" | "valgrind"
-                | "hotspots" | "all_tools" | "keep_going" => {
+                "python_overhead"
+                | "adaptive"
+                | "perf"
+                | "gpu"
+                | "heaptrack"
+                | "valgrind"
+                | "hotspots"
+                | "all_tools"
+                | "keep_going"
+                | "check_output_stability" => {
                     if value
                         .as_bool()
                         .ok_or("tool and mode flags must be booleans")?
@@ -181,8 +221,12 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
             .try_get_matches_from(argv)
             .map_err(|e| format!("benchmark {name}: {e}"))?;
         let mut args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
+        args.non_interactive = true;
         args.profile_flags = crate::profiles::selection(&matches);
         experiment::validate(&args)?;
+        if args.input_source.is_some() {
+            crate::input_hints::discover(&args)?;
+        }
         crate::python::prepare(&args, &crate::python::environment(&args)?)?;
         let binary = args
             .executable
@@ -211,10 +255,37 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
     }
     Ok(result)
 }
-pub fn execute(args: &Cli, journal: &mut Journal) -> Result<Value, String> {
+pub(crate) fn selected(args: &Cli) -> Result<Vec<Cli>, String> {
+    // Validate the entire suite before filtering, so selection cannot hide bad configuration.
     let plans = load(args.suite.as_deref().unwrap())?;
-    let mut report = json!({"schema_version":3,"kind":"suite","tool_version":env!("CARGO_PKG_VERSION"),
+    for name in &args.case {
+        if !plans.iter().any(|p| p.name.as_ref() == Some(name)) {
+            return Err(format!("unknown suite case {name:?}; use --list-cases"));
+        }
+    }
+    Ok(plans
+        .into_iter()
+        .filter(|p| args.case.is_empty() || args.case.contains(p.name.as_ref().unwrap()))
+        .collect())
+}
+
+pub fn execute(args: &Cli, journal: &mut Journal) -> Result<Value, String> {
+    let plans = selected(args)?;
+    execute_plans(args, plans, journal, json!({"requested_cases":args.case}))
+}
+
+pub(crate) fn execute_plans(
+    args: &Cli,
+    plans: Vec<Cli>,
+    journal: &mut Journal,
+    extra: Value,
+) -> Result<Value, String> {
+    let mut report = json!({"schema_version":3,"kind":if extra["input_matrix"].is_object(){"input_matrix"}else{"suite"},"tool_version":env!("CARGO_PKG_VERSION"),
         "suite_file":args.suite,"cases":[],"completed":false,"interrupt_signal":0});
+    report
+        .as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
     journal.emit(json!({"event":"suite_start","report":report}))?;
     for (index, mut plan) in plans.into_iter().enumerate() {
         plan.progress = args.progress;
@@ -280,10 +351,29 @@ pub fn render(report: &Value, format: &str, view: crate::report::View) -> String
     }
     let _ = writeln!(
         out,
-        "bench suite | {} cases | completed: {}",
+        "bench {} | {} cases | completed: {}",
+        if report["kind"] == "input_matrix" {
+            "input cases"
+        } else {
+            "suite"
+        },
         report["cases"].as_array().unwrap().len(),
         report["completed"]
     );
+    if report["kind"] == "input_matrix" {
+        out.push_str("Each input case has independent warmups, measurements and results. Inferred examples are not exhaustive.\n");
+        for case in report["cases"].as_array().unwrap() {
+            let _ = writeln!(
+                out,
+                "  {} | {}/{} passed | mean wall {} s | peak RSS {} KiB",
+                case["name"],
+                case["successful_runs"],
+                case["runs"].as_array().map(Vec::len).unwrap_or(0),
+                case["summary"]["wall"]["mean"],
+                case["summary"]["rss"]["max"]
+            );
+        }
+    }
     if report["comparison"].is_object() {
         let _ = writeln!(out, "Comparison: {}", report["comparison"]);
     }

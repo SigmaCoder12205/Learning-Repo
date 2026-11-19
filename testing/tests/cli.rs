@@ -545,7 +545,8 @@ fn eof_prompt_loop_reports_bounded_output_and_input_replay_resolves_it() {
     let r = report(&output);
     assert_eq!(r["successful_runs"], 2);
     assert_eq!(r["warmups"][0]["status"], "ok");
-    assert!(r["runs"][0].get("stdout_preview").is_none());
+    assert!(r["runs"][0]["stdout_preview"].is_string());
+    assert_eq!(r["runs"][0]["stdout_preview_truncated"], false);
 
     fs::write(&input, "").unwrap();
     let output = bench(&[

@@ -77,11 +77,57 @@ pub(crate) struct Cli {
     /// Combined stdout/stderr limit in MiB
     #[arg(long, default_value = "64", value_parser = positive)]
     pub(crate) output_limit: f64,
-    /// Replay this file as stdin for every invocation (default: /dev/null, immediate EOF)
+    /// Replay stdin from a file; otherwise capture answers in a terminal or use /dev/null
     #[arg(long)]
     pub(crate) input: Option<PathBuf>,
+    /// Replay literal stdin text; use shell quoting for newlines
+    #[arg(long, conflicts_with_all = ["input", "input_line", "interactive"])]
+    pub(crate) input_text: Option<String>,
+    /// Repeat for each answer; a newline is appended to every value
+    #[arg(long, allow_hyphen_values = true, conflicts_with_all = ["input", "input_text", "interactive"])]
+    pub(crate) input_line: Vec<String>,
+    /// Answer prompts once in an unmeasured trial, then replay the recorded answers
+    #[arg(long, conflicts_with_all = ["input", "input_text", "input_line", "non_interactive"])]
+    pub(crate) interactive: bool,
+    /// Disable automatic answer-once capture in a terminal
+    #[arg(long)]
+    pub(crate) non_interactive: bool,
+    /// Human-inclusive deadline for the unmeasured input trial
+    #[arg(long, default_value = "120", value_parser = positive)]
+    pub(crate) interactive_timeout: f64,
+    /// Show inferred Python/C++ input types and suggestions without executing the target
+    #[arg(long, conflicts_with_all = ["suite", "recover", "check_tools"])]
+    pub(crate) discover_inputs: bool,
+    /// Source file to inspect for input hints when benchmarking a compiled executable
+    #[arg(long)]
+    pub(crate) input_source: Option<PathBuf>,
+    /// Replace a 1-based answer line with each JSON string value, e.g. '1=["0","1"]'
+    #[arg(long, value_name = "LINE=VALUES", conflicts_with = "explore_inputs")]
+    pub(crate) vary_input: Vec<String>,
+    /// Replace a 1-based argument after -- with each JSON string value
+    #[arg(long, value_name = "INDEX=VALUES", conflicts_with = "explore_inputs")]
+    pub(crate) vary_arg: Vec<String>,
+    /// Test inferred example values one field at a time, retaining the original case
+    #[arg(long)]
+    pub(crate) explore_inputs: bool,
+    /// Maximum generated input cases; explicit Cartesian matrices exceeding this fail
+    #[arg(long, default_value = "16", value_parser = clap::value_parser!(u32).range(1..=256))]
+    pub(crate) max_cases: u32,
+    #[arg(skip)]
+    pub(crate) input_case: Option<serde_json::Value>,
+    #[arg(skip)]
+    pub(crate) prepared_compilation: Option<serde_json::Value>,
     #[arg(long)]
     pub(crate) expect_output: Option<PathBuf>,
+    /// Require stdout to exactly equal this literal text, including whitespace
+    #[arg(long, conflicts_with = "expect_output")]
+    pub(crate) expect_text: Option<String>,
+    /// Require each literal substring in stdout (repeatable, case sensitive)
+    #[arg(long)]
+    pub(crate) expect_contains: Vec<String>,
+    /// Require identical stdout across at least two successful measured runs
+    #[arg(long)]
+    pub(crate) check_output_stability: bool,
     #[arg(long, default_value = "0", allow_negative_numbers = true)]
     pub(crate) expect_exit: i32,
     #[arg(long, default_value = ".")]
@@ -150,6 +196,12 @@ pub(crate) struct Cli {
     /// Run named benchmarks from a JSON suite
     #[arg(long, conflicts_with_all = ["program", "executable", "source", "python", "interpreter", "python_arg", "recover", "check_tools"])]
     pub(crate) suite: Option<PathBuf>,
+    /// Run only these exact suite case names (repeatable; preserves suite order)
+    #[arg(long, requires = "suite")]
+    pub(crate) case: Vec<String>,
+    /// Validate and list suite cases without executing targets
+    #[arg(long, requires = "suite")]
+    pub(crate) list_cases: bool,
     /// Name stored with this experiment
     #[arg(long)]
     pub(crate) name: Option<String>,

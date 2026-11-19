@@ -29,6 +29,7 @@ pub fn run(target: &[OsString], opts: &RunOptions<'_>, dir: &Path) -> Result<Val
     let analysis_opts = RunOptions {
         input: None,
         expected: None,
+        checks: Default::default(),
         expected_exit: 0,
         ..*opts
     };

@@ -2,6 +2,10 @@
 
 Continuing development in a new chat? Read the [project history and handoff](HANDOFF.md) and [development guide](docs/development.md).
 
+Version **0.13** adds inline exact/substring output assertions, full-stdout repeatability checks, and suite case listing/selection. Input-type hints and CLI validation received targeted cleanup. See [correctness and focused suites](docs/correctness.md).
+
+Version **0.12** adds inferred input types, automatic answer-once terminal capture, inline answers, and bounded stdin/argument variations with separate results. See [inputs and test cases](docs/inputs.md).
+
 Version **0.11** adds runtime identification, separate Python startup calibration, ASCII histograms, per-run outlier labels, private local history, named baseline pins, warning-only regression thresholds, and interruptible cooldowns. See the [feature guide](docs/features.md) and [brainstorm/roadmap](docs/roadmap.md).
 
 ```bash
@@ -188,18 +192,21 @@ bench ./solver --input cases/input.txt \
   --expect-output cases/expected.txt --expect-exit 0
 ```
 
-Stdin is reopened for every invocation; the default is `/dev/null`. Expected output is compared byte-for-byte, including whitespace, final newlines, and binary data. Comparison happens after measured execution and uses fixed-size buffers. Without `--expect-output`, output correctness is not checked. Exit status is always checked; zero is expected by default, and negative codes represent signals.
+Stdin is replayed from the beginning for every invocation. In a terminal, absent input triggers an extra unmeasured answer-once trial; otherwise the default remains `/dev/null`. Use `--non-interactive` to skip capture. Expected output is compared byte-for-byte, including whitespace, final newlines, and binary data. Comparison happens after measured execution and uses fixed-size buffers. Use `--expect-text` for an exact inline expectation or repeat `--expect-contains` for required literal substrings. Without an output assertion, output correctness is not checked. `--check-output-stability` separately checks repeatability across measured runs; stability alone does not prove correctness. Exit status is always checked; zero is expected by default, and negative codes represent signals.
 
-For a calculator that reads an operation, one number per line, then `q`, supply a complete session:
+For a calculator that reads an operation, one number per line, then `q`, answer once with `bench ./calculator`, or supply a complete session without a file:
 
 ```bash
-printf '+\n2\n3\nq\n' > calculator-input.txt
-bench ./calculator --input calculator-input.txt --intermediate
+bench ./calculator --input-line + --input-line 2 --input-line 3 --input-line q
+bench ./calculator --explore-inputs --max-cases 12
+bench ./calculator --discover-inputs
 ```
 
-The same sample is included in `examples/calculator-input.txt`. Every warmup and measured run receives the whole file from the beginning. This measures the complete scripted process invocation, including prompts and input parsing, rather than just arithmetic.
+File replay remains available: `bench ./calculator --input examples/calculator-input.txt`. Every warmup and measured run receives the same complete input from the beginning. See [input discovery and variations](docs/inputs.md) for typed suggestions, argument variations, and per-case results. This measures the complete scripted process invocation, including prompts and input parsing, rather than just arithmetic.
 
 If the first warmup reaches `output_limit`, no measured runs start. A program that ignores failed reads at EOF can print prompts indefinitely, even though no person is typing. bench reports the captured byte counts, a bounded stdout preview, and input guidance. In C++, check `if (!(std::cin >> operation))` before using the operation and `if (!std::getline(std::cin, line))` before processing each line; exit or return an error on EOF instead of retrying forever. Increasing the output limit does not fix such a loop.
+
+To check an answer printed after prompts, use `--expect-contains $'Answer: 212\n'`. To run only selected saved cases, use `bench --suite suite.json --list-cases` and `bench --suite suite.json --case NAME`. The ready-to-run `examples/correctness-suite.json` demonstrates native and Python output checks; see [the correctness guide](docs/correctness.md).
 
 ### Working directory, environment, and throughput
 
@@ -271,8 +278,17 @@ The new experiment/report options are listed in [the experiment guide](docs/expe
 | `--warmup N` | `1` | Discarded warmups; zero allowed |
 | `--timeout SECONDS` | `10` | Deadline per invocation |
 | `--output-limit MIB` | `64` | Combined stdout/stderr limit per invocation |
-| `--input FILE` | `/dev/null` | Replayed stdin |
+| `--input FILE` | Terminal capture, otherwise `/dev/null` | Replayed stdin |
+| `--input-line TEXT`, `--input-text TEXT` | Off | Answers without a file |
+| `--interactive`, `--non-interactive` | Automatic when stdin/stderr are terminals | Enable/disable answer-once capture |
+| `--discover-inputs`, `--input-source FILE` | Off / inferred source | Inspect likely input types without executing |
+| `--explore-inputs`, `--vary-input`, `--vary-arg` | Off | Separate cases for inferred or explicit values |
+| `--max-cases` | `16` | Bound generated cases (1–256) |
 | `--expect-output FILE` | — | Exact expected stdout |
+| `--expect-text TEXT` | — | Exact inline stdout, including newlines |
+| `--expect-contains TEXT` | — | Repeatable required stdout substring |
+| `--check-output-stability` | Off | Require identical full stdout across measured runs (at least 2) |
+| `--list-cases`, `--case NAME` | Off / all | Validate/list or select exact suite case names |
 | `--expect-exit CODE` | `0` | Expected exit code; negative for signals |
 | `--cwd DIRECTORY` | Current directory | Target working directory |
 | `--env KEY=VALUE` | Inherited | Repeatable override for target and compiler |
@@ -327,7 +343,7 @@ Linux resource accounting may include descendants the target waits for; this is 
 
 Output is captured in temporary files, so printing can affect timing and filesystem counters. Output limits are best-effort and may overshoot; they are not hard disk quotas. Compiler output is limited to 16 MiB. Temporary storage follows system configuration, including `TMPDIR`. Deadlines are not hard real-time guarantees, especially for processes blocked in kernel operations.
 
-Programs execute with your permissions; this is **not a sandbox for untrusted code**. The target process group is killed on timeout, output-limit breach, interruption, and leader exit. Descendants that deliberately leave the group can escape cleanup. Programs must wait for their own children before returning. Programs requiring a live terminal and persistent services are not suitable targets; prompt-based programs can be benchmarked with a complete, finite `--input` script.
+Programs execute with your permissions; this is **not a sandbox for untrusted code**. The target process group is killed on timeout, output-limit breach, interruption, and leader exit. Descendants that deliberately leave the group can escape cleanup. Programs must wait for their own children before returning. Measured invocations use file-based stdin, so programs requiring a live terminal and persistent services are not suitable targets. Line-oriented prompt programs can use answer-once capture, inline answers, or a complete, finite `--input` script.
 
 Warmups may prime filesystem caches but do not transfer process-local state to later invocations. CPU scaling, thermals, caches, background tasks, and scheduling affect results. The tool does not flush caches or change power policies; CPU pinning is available through --cpu-affinity. Baseline metrics do not include allocations, leaks, hardware counters, or GPU activity; those require the optional diagnostic passes. Energy measurement is not implemented.
 

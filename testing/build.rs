@@ -6,6 +6,8 @@ fn main() {
     println!("cargo:rerun-if-changed=native/measure.h");
     println!("cargo:rerun-if-changed=native/helper.c");
     println!("cargo:rerun-if-changed=native/launcher.c");
+    println!("cargo:rerun-if-changed=native/interactive.c");
+    println!("cargo:rerun-if-changed=native/interactive.h");
     let helper =
         std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("bench-measure");
     let status = cc::Build::new()
@@ -29,8 +31,10 @@ fn main() {
     );
     cc::Build::new()
         .file("native/launcher.c")
+        .file("native/interactive.c")
         .flag_if_supported("-std=c11")
         .warnings(true)
         .extra_warnings(true)
         .compile("bench_measure");
+    println!("cargo:rustc-link-lib=util");
 }

@@ -1,6 +1,6 @@
 # bench project handoff
 
-Last updated: **2026-11-12 UTC**. This is the continuity record requested by the user for a new Codex chat.
+Last updated: **2026-11-19 UTC**. This is the continuity record requested by the user for a new Codex chat.
 
 This document combines the available conversation history with the checked-in implementation and guides. It records the sequence and decisions we can establish; it is not a verbatim transcript of every earlier assistant response. Where exact early implementation details are unavailable, they are not invented. Current source and new user instructions take precedence over this snapshot.
 
@@ -8,13 +8,15 @@ This document combines the available conversation history with the checked-in im
 
 - Project: **bench**, formerly **cppbench**, a Linux CLI for benchmarking native executables and Python scripts.
 - Checkout: `/home/arch/Projects/Learning-Repo/testing`, inside the larger `Learning-Repo` Git repository.
-- Current package/installed version: **0.11.0**. The engine remains **Rust + C**; Python is a supported workload, not a replacement implementation.
+- Current package version: **0.13.0**; installation verification is recorded in history item 14. The engine remains **Rust + C**; Python is a supported workload, not a replacement implementation.
 - Main command: `bench ./program` or `bench script.py`. Default report is simple; `--intermediate` and `--advanced` add detail.
 - Installation: `~/.local/bin/bench`; `~/.local/bin/cppbench` is a compatibility symlink to `bench`.
 - Account authority: local **Keycloak + PostgreSQL**, not a Rust password database. Benchmarks do not require login or Docker.
 - The account realm, OAuth client, database volume, and credential-cache paths intentionally retain `cppbench` identifiers. Do not mechanically rename or reset them.
-- The latest feature request produced version 0.11: runtime insights, Python startup calibration, histograms, local history/pins, advisory regressions, and interruptible cooldowns. See history item 12 and `docs/features.md`; deferred brainstorm ideas are in `docs/roadmap.md`.
-- Last full verification: **87 tests passed** on 2026-11-12, plus Rust formatting, Clippy with warnings denied, and C/C++ header checks. Prior counts of 77/78 below describe earlier versions/tasks.
+- The latest cleanup/feature request produced 0.13: inline output assertions, output repeatability checks, suite listing/selection, and targeted hint/validation cleanup. See history item 14 and `docs/correctness.md`.
+- Version 0.12 added inferred input types, answer-once terminal capture, inline answers, and bounded stdin/argument matrices. See item 13 and `docs/inputs.md`.
+- Version 0.11 added runtime insights, Python startup calibration, histograms, local history/pins, advisory regressions, and interruptible cooldowns. See history item 12 and `docs/features.md`; deferred brainstorm ideas are in `docs/roadmap.md`.
+- Last full verification: **108 tests passed** on 2026-11-19, plus Rust formatting, Clippy with warnings denied, and C/C++ header checks. Prior counts of 77/78 below describe earlier versions/tasks.
 
 ## User intent and working preferences
 
@@ -26,7 +28,7 @@ They originally requested at least 20 main domain flags with 7 subflags each, th
 
 For accounts, the user first accepted a local implementation, then explicitly requested a dedicated account system instead of Rust account/password logic. They asked to delete the old Rust accounts, retain registration/login/whoami/logout and related actions, and make accounts persistent rather than expiring. The replacement is Keycloak with durable PostgreSQL storage and long-lived, revocable CLI authorization.
 
-They have repeatedly asked to continue implementation after interruptions. Work toward the requested outcome, avoid unnecessary permission loops, and explain genuine dependencies when needed. Their most recent feature request was to rename the CLI to `bench` and add Python support; both are complete.
+They have repeatedly asked to continue implementation after interruptions. Work toward the requested outcome, avoid unnecessary permission loops, and explain genuine dependencies when needed. Their latest request is another round of feature brainstorming, cleanup, and implementation. The chosen additions improve output correctness, repeatability, and focused suite runs; the earlier input workflow, rename, and Python support remain available.
 
 ## History, in order
 
@@ -78,7 +80,7 @@ Accounts have no built-in expiration date. CLI authorization uses offline refres
 
 The user reported **0.8.0** stopping during the first warmup with `output_limit` and exit `-9`, leaving `0/0` measured successes. Their calculator prompts for input; its invalid-input loop can repeatedly print when stdin reaches EOF.
 
-Bench defaults stdin to `/dev/null`, which immediately reaches EOF. A prompt loop that ignores failed reads can exhaust the output cap. Increasing the cap is not the real solution: provide a complete finite `--input` file and ensure the target handles EOF. Current reporting explains this distinction, including replay files that also eventually reach EOF.
+At that time bench defaulted stdin to `/dev/null`, which immediately reaches EOF. In 0.12 this remains the noninteractive default, while terminal sessions automatically capture answers once. A prompt loop that ignores failed reads can exhaust the output cap. Increasing the cap is not the real solution: provide a complete finite `--input` file and ensure the target handles EOF. Current reporting explains this distinction, including replay files that also eventually reach EOF.
 
 For the posted calculator, a suitable example input is `+`, `1`, `2`, and `q`, each on its own line. The exact input must match the target program. All warmups, measured runs, and diagnostic replays receive a fresh replay of the file.
 
@@ -134,6 +136,35 @@ The user requested brainstorming and implementation, suggesting runtime detectio
 - The new modules are `src/{runtime,insights,history}.rs`; root subcommands now live in `cli::Command`, preserving account behavior. Reports remain schema 3 and the backend remains `isolated-c-wait4-v1`. No dependencies added. Both feature guide and roadmap are installed with the other guides.
 - Verification: `make verify` passed **87 tests** (27 unit, 6 accounts, 16 CLI, 10 diagnostics, 6 experiments, 8 features, 7 profiles, 7 Python). New tests cover calibration isolation/failure/timeout/interruptions, cooldown interruption, distribution counts, runtime/signal metadata, metric filtering, history privacy/immutability, warning versus hard thresholds, suites, and recovery. Formatting, Clippy, C/C++ checks, and project-scoped whitespace checks passed. Live Keycloak/hardware profiler tests were not rerun.
 - `make install` built and installed **0.11.0**. Installed smoke checks passed for both command names, native histograms, history recording/listing/pins, immutable pin rejection, warning and hard thresholds, cooldown comparison mismatch, virtual-environment Python calibration, HTML output, and mixed-suite pinned comparisons. Smoke history/venvs/reports used temporary directories; user history and account state were not changed.
+
+### 13. Input discovery, capture, and variations in 0.12, 2026-11-18
+
+The user asked for easier stdin and command-line input without needing a file, inferred types for questions, and separate results for different values. They accepted answer-once capture while clarifying that bench should infer expected types. These features are implemented, without claiming exhaustive understanding of arbitrary code.
+
+- With terminal stdin and stderr and no supplied input, bench runs one extra **unmeasured** PTY trial. It displays source/prompt type and choice hints; the user answers through program exit, including any quit command. Recorded bytes are replayed from the beginning for all warmups, measurements, and diagnostics. Human response time is excluded. `--interactive` requests capture explicitly; `--non-interactive` disables it. Suites never auto-capture. Piping into bench is not target stdin.
+- The trial repeats program side effects. Its human-inclusive deadline is `--interactive-timeout` (default 120 seconds), with the existing output cap, a 1 MiB input cap, Ctrl-C handling, and process-group cleanup. Failed setup prevents measurements. The trial has a terminal but measured runs use regular-file stdin/captured output; raw-key, curses, password-without-echo, and terminal-dependent applications are outside this replay feature.
+- `--input-line` appends a newline per answer; `--input-text` preserves literal text. Both are limited to 1 MiB and avoid user-created files. Existing binary `--input FILE` remains. Temporary replay files live through diagnostics and are then removed. Provenance hashes actual input bytes and settings avoid persisting temporary paths.
+- `--discover-inputs` reads source without executing/importing it. Heuristics recognize Python input/conversions/argparse, C/C++ cin/getline/scanf, direct argv indices, and possible switch choices. Source defaults to the Python script, compile sources, or a sibling C/C++ file; `--input-source FILE` overrides. Each source is a regular UTF-8 file of at most 256 KiB. Types/examples have evidence labels. Dynamic code, multiline patterns, branches, loops, multiple tokens per line, and valid ranges remain limitations; unknown types are not claimed as known.
+- `--explore-inputs` retains the original case and changes one inferred field at a time up to `--max-cases` (default 16, range 1–256). Standalone q/quit/exit seed answers are not varied. Explicit repeatable `--vary-input '1=["0","1"]'` and `--vary-arg '2=["10","100"]'` produce Cartesian matrices and reject overflow. Indices are 1-based answer lines/arguments after `--`. Presets: @integer, @number, @text, @character, @boolean. Limits: 64 axes, 256 choices/axis, UTF-8 stdin at most 1 MiB/case and 16 MiB combined. Generated plans preflight before any measured cases; source compilation is reused once. These are bounded examples, not branch coverage or all valid combinations.
+- Matrices use sequential suite execution with independent per-case measurements, correctness checks, diagnostics, and output previews. Ordinary failures retain results and allow later cases; interruption stops execution. Text/HTML show answer/argument previews and first measured output. JSON retains case metadata; CSV retains case-labelled metrics. Successful rows now also contain bounded stdout previews (512 bytes); one old assertion requiring their absence was updated. Reports/history may contain answer/output previews.
+- Suite JSON accepts `input_lines`, `input_text`, and `input_source`, rejecting conflicting inputs during preflight. Interactive capture and generated matrices are standalone CLI features. History/pins, saved comparisons, HTML, and checkpoint recovery support matrices; comparisons still check each case's command/input hash. Different expected outputs need separate suite entries because a matrix shares one expectation.
+- Timed runs retain the isolated C measurement backend and report schema 3. A separate C PTY supervisor links libutil only for the unmeasured trial. Its signal handlers require sequential calls; do not route timed/RSS measurements through it. The Python PTY test driver is development tooling, not an engine dependency. Account state and compatibility identifiers remain unchanged.
+- Verification: `make verify` passed **99 tests** (27 unit, 6 accounts, 16 CLI, 10 diagnostics, 6 experiments, 8 features, 12 inputs, 7 profiles, 7 Python), formatting, Clippy with warnings denied, and C/C++ checks. New tests cover native/Python terminals, EOF, deadlines, Ctrl-C, descendant cleanup, output limits, failed setup, source discovery without execution, matrix limits/preflight, compile reuse, telemetry replay, history/recovery/HTML, and suite inputs. Live account services and hardware profilers were not involved.
+
+- After the final explicit source-hint suite-preflight fix, Clippy and all 18 focused input/experiment tests passed again. `make install` rebuilt and installed **0.12.0**; installed smoke checks passed for both command names and the compatibility symlink, source hints without execution, native inline stdin, automatic terminal capture, inferred exploration, combined stdin/argument matrices, suite preflight, and the installed input guide. Temporary smoke files were removed. Project-scoped whitespace checks passed.
+
+### 14. Reliability features and cleanup in 0.13, 2026-11-19
+
+The user requested further brainstorming, cleanup, and implementation. The selected features address gaps exposed by the temperature-converter discussion: successful exit alone does not prove correct output, repeated outputs can change, and developers need to run only relevant saved cases. The roadmap records delivered scope and future candidates rather than claiming all ideas were implemented.
+
+- `--expect-text TEXT` adds exact inline stdout expectations (up to 1 MiB, mutually exclusive with `--expect-output FILE`). Repeatable `--expect-contains TEXT` requires every literal case-sensitive substring, in any order (at most 16 nonempty literals, each up to 4096 bytes). It can accompany exact checks. All checks operate on full stdout after native measurement using bounded buffers and streaming substring matching; they do not use the 512-byte preview. Checks retain `output_mismatch` semantics and add byte counts, zero-based first mismatch offset, and one-based missing substring indices to JSON/text/HTML.
+- `--check-output-stability` requires at least two requested measured runs. Full-stdout SHA-256 fingerprints from successful measured runs are compared per case with the first. Warmups, stderr, diagnostics, and failed samples are excluded. `output_stability` reports stable/unstable/insufficient_samples, distinct outputs, reference run, and differing run numbers. An unstable/insufficient result makes measurement_passed false and exit 1, skips diagnostics, and cannot be saved as a successful baseline. Individual successful timing samples remain in statistics. Stability describes observed output repeatability, not mathematical correctness or all possible nondeterminism; timestamps/randomness can intentionally vary.
+- Assertions flow through target-preserving diagnostics. Compiler runs, probes, Python startup calibration, profiler analysis commands, and heaptrack's mixed-stdout recording are exempt. These exclusions are explicit in RunOptions and tested. Hashing is outside measured time but adds between-run work/cache activity. CSV remains a metric-row format; aggregate stability is in text/JSON/HTML and the exit code.
+- `--suite FILE --list-cases` validates and lists without executing targets or recording history/checkpoints; text/JSON and `--output` are supported. Repeat `--case NAME` to select exact case-sensitive names. Selection preserves suite order, deduplicates repeated names, and rejects unknown names before execution. The complete suite still preflights, including unselected cases; required files/interpreters must exist. No filtering of input matrices or recovered reports. Comparison membership rules remain strict: save/compare with the same selected cases.
+- Suite entries/defaults accept `expect_text`, `expect_contains` arrays, and `check_output_stability`. The runnable `examples/correctness-suite.json` demonstrates native/Python cases. The new `docs/correctness.md` includes temperature-converter commands, behavior, limits, and diagnostics exceptions and is installed alongside existing guides.
+- Comparison provenance now hashes exact expectations and sorted/deduplicated substring expectations. Equivalent inline/file exact bytes match. Changed checks or repeatability settings are incompatible unless explicitly overridden; failed measurements still cannot be made valid. Older unchecked reports remain compatible with unchecked runs. Older checked-output reports lack these hashes and need regeneration or an inspected override. Literal expectations are present in reports, like answer/output previews already were.
+- Cleanup: centralized repeated CLI mode-option validation, moved file-output comparison into the reusable correctness module, and fixed input-hint false matches (`print` versus `int`, `message` versus `age`), yes/no suggestions, and scanf format extraction when a preceding printed string exists. `sscanf` no longer claims stdin input. Heuristics remain limited; this is not semantic type analysis.
+- Verification: `make verify` passed **108 tests** (27 unit, 6 accounts, 16 CLI, 9 correctness, 10 diagnostics, 6 experiments, 8 features, 12 inputs, 7 profiles, 7 Python), Rust formatting, Clippy with warnings denied, and C/C++ checks. New coverage includes binary and buffer-boundary stdout checks, mismatch offsets, changes beyond previews, warmup/stderr exclusions, independent matrix stability, complete/partial recovery, HTML/history, suite listing/selection/preflight, comparison compatibility, Python calibration exemptions, and hint regressions. Existing diagnostic fixtures now verify assertion forwarding and heaptrack exemptions. The example suite listed and ran successfully. No live account service or hardware-profiler checks were needed.
 
 ## Current command and report contract
 
@@ -258,7 +289,9 @@ Start locally with `./auth/scripts/setup.sh`. It generates bootstrap credentials
 | --- | --- |
 | Entry/CLI/orchestration | `src/main.rs`, `src/cli.rs`, `src/app.rs` |
 | Workload preparation/runs | `src/benchmark.rs`, `src/python.rs`, `src/runner.rs`, `src/suite.rs` |
+| Input discovery/capture/cases | `src/input_hints.rs`, `src/interactive.rs`, `src/inputs.rs`, `native/interactive.{c,h}` |
 | Native boundary | `build.rs`, `native/launcher.c`, `native/helper.c`, `native/measure.c`, `native/measure.h` |
+| Output correctness/repeatability | `src/correctness.rs` |
 | Metrics/statistics/provenance | `src/metrics.rs`, `src/stats.rs`, `src/experiment.rs` |
 | Reports/comparisons/recovery | `src/report.rs`, `src/html.rs`, `src/comparison.rs`, `src/storage.rs` |
 | Diagnostics | `src/diagnostics/`, `src/hotspots.rs` |
@@ -266,10 +299,10 @@ Start locally with `./auth/scripts/setup.sh`. It generates bootstrap credentials
 | Account client | `src/accounts/{mod,browser,provider,store}.rs` |
 | Local identity service | `auth/compose.yaml`, `auth/realm.json`, `auth/scripts/setup.sh` |
 | Public instrumentation | `include/bench_telemetry.h`, legacy compatibility header |
-| Integration tests | `tests/{cli,accounts,experiments,profiles,diagnostics,python}.rs`, fixtures |
+| Integration tests | `tests/{cli,accounts,experiments,features,inputs,correctness,profiles,diagnostics,python}.rs`, fixtures |
 | Example workloads | `examples/workload.cpp`, `network_profile.cpp`, `workload.py`, suite JSON files |
 
-Read [README.md](README.md) for usage; [development](docs/development.md) for code/workflow; [experiments](docs/experiments.md) for suites/comparisons/recovery; [profiles](docs/profiles.md) for the complete catalog and research; [accounts](docs/accounts.md) for identity setup; [memory](docs/memory.md) for RSS; [Python](docs/python.md) for interpreter behavior.
+Read [README.md](README.md) for usage; [development](docs/development.md) for code/workflow; [experiments](docs/experiments.md) for suites/comparisons/recovery; [profiles](docs/profiles.md) for the complete catalog and research; [accounts](docs/accounts.md) for identity setup; [memory](docs/memory.md) for RSS; [Python](docs/python.md) for interpreter behavior; [input workflows](docs/inputs.md) for discovery, capture, and cases.
 
 ## Dependencies, builds, and validation
 
@@ -289,7 +322,7 @@ bench examples/workload.py --runs 2 --warmup 0 --intermediate
 bench --suite examples/python-suite.json
 ```
 
-`make verify` runs formatting, `cargo clippy --locked --all-targets -- -D warnings`, C/header syntax checks with warnings denied, and `cargo test --locked`. `make install` builds release with LTO, installs the binary, compatibility symlink, both headers, and profile/account/memory/Python guides under `~/.local`. `PREFIX` and `DESTDIR` are supported. Release builds can take a few minutes. No Cargo dependency additions were needed for Python support.
+`make verify` runs formatting, `cargo clippy --locked --all-targets -- -D warnings`, C/header syntax checks with warnings denied, and `cargo test --locked`. `make install` builds release with LTO, installs the binary, compatibility symlink, both headers, and profile/account/memory/Python/feature/input/correctness guides and roadmap under `~/.local`. `PREFIX` and `DESTDIR` are supported. Release builds can take a few minutes. No Cargo dependency additions were needed for Python support.
 
 Focused tests: `cargo test --locked --test python`, `--test cli`, `--test profiles`, `--test experiments`, `--test diagnostics`, `--test accounts`; parser/statistics/measurement tests also live in their Rust modules. Run validation appropriate to a change rather than rerunning expensive checks without a reason.
 
@@ -301,7 +334,7 @@ Generated artifacts: `target/`, `build/`, `dist/`, and new `bench-artifacts/`; o
 
 ## Repository snapshot and safe continuation
 
-At the start of this documentation task, branch was `main`, repository HEAD was `1912694`, and the latest commit touching this project was `5e35777` dated 2026-11-11. `testing/` was clean: the previous feature work had been committed between sessions. There was an unrelated user edit at `../projects/temp_conversion/temp_conversion.cpp`; leave it alone. Earlier sessions had other parent-repository edits, but do not treat those historical dirty lists as current state.
+Historical snapshot from the initial continuity task: branch was `main`, repository HEAD was `1912694`, and the latest commit touching this project was `5e35777` dated 2026-11-11. `testing/` was clean: the previous feature work had been committed between sessions. There was an unrelated user edit at `../projects/temp_conversion/temp_conversion.cpp`; leave it alone. Earlier sessions had other parent-repository edits, but do not treat those historical dirty lists as current state.
 
 Installed command/version and the `cppbench -> bench` symlink were rechecked on 2026-11-12. Service health, current credentials, optional profiler permissions, and fresh benchmark/test results were not revalidated for this documentation-only task. Do not infer them from old successful runs.
 
@@ -314,4 +347,8 @@ To continue in a new chat:
 5. When changing the installed CLI, build/install as appropriate and verify the command the user will actually run. Do not claim deployment or installation without checking it.
 6. Update this record with the new behavior, decisions, validation, and any genuinely unfinished work. Do not claim there is a queued feature merely because a limitation is documented.
 
-Version 0.11 implements the latest requested feature set described in history item 12. Future candidates are documented in `docs/roadmap.md`; broader runtime adapters, paired A/B runs, animated spinners, Python line profiling, broader GPU support, SMTP, and remote account deployment remain unimplemented.
+Version 0.13 implements the reliability and cleanup work in history item 14; earlier features remain available. Future candidates are documented in `docs/roadmap.md`; broader runtime adapters, paired A/B runs, animated spinners, Python line profiling, broader GPU support, SMTP, and remote account deployment remain unimplemented.
+
+The 2026-11-18 input task started with a clean `testing/` tree and unrelated parent changes to `projects/temp_conversion/temp_conversion.cpp` and its executable. Those user changes were preserved. Feature changes were not committed automatically.
+
+The 2026-11-19 task preserved all existing uncommitted 0.12 work. An unrelated untracked `projects/number_guessing/` directory was present in the parent repository and was left untouched. No automatic commits were created.

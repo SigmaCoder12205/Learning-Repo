@@ -1,6 +1,6 @@
 # Feature brainstorm and delivery map
 
-Updated 2026-11-12. The user requested a broad feature brainstorm followed by implementation. This list distinguishes delivered behavior from future candidates.
+Updated 2026-11-19. The user requested a broad feature brainstorm followed by implementation. This list distinguishes delivered behavior from future candidates.
 
 | Idea | State | Decision |
 | --- | --- | --- |
@@ -20,6 +20,28 @@ Updated 2026-11-12. The user requested a broad feature brainstorm followed by im
 | Warmup convergence diagnostics | Future candidate | Plot warmup trends; fresh Python processes cannot retain imports/JIT state across runs. |
 | Machine-condition snapshots | Future candidate | Permitted CPU frequency, thermal and power-state observations with source/scope labels. |
 | Resource budgets | Future candidate | Optional memory/process limits with clear failure reasons; requires cgroup/platform design and descendant tests. |
-| Workload parameter sweeps | Future candidate | Named cases from size/concurrency matrices with scaling plots and suite preflight. |
+| Workload parameter sweeps | Stdin/argument matrices delivered in 0.12 | Named parameter schemas and scaling plots remain future candidates. |
 
 See [Runtime insights and local history](features.md) for delivered behavior. Version 0.11 preserves the Rust + isolated C engine, account identities, telemetry compatibility, and report schema version 3.
+
+## Input workflow delivered in 0.12
+
+Source/prompt type hints, answer-once terminal capture, inline stdin, bounded inferred examples, explicit stdin/argument matrices, output previews, and separate case reports are implemented. See [the input guide](inputs.md). Exhaustive input-schema discovery, branch-aware generation, and raw-terminal replay remain outside this heuristic workflow. The isolated C measurement backend and schema version 3 remain unchanged.
+
+## Reliability brainstorm and delivery in 0.13
+
+The next priorities came from the input-testing workflow: knowing that a program exits successfully is different from checking its answers, and a large suite should be easy to narrow while developing.
+
+| Idea | State | Scope |
+| --- | --- | --- |
+| Inline expected answers | Delivered | Exact stdout text and repeated required literal substrings; full-output streaming checks, not preview matching. |
+| Useful mismatch details | Delivered | Actual/expected byte counts, first differing byte, and missing substring indices in reports. |
+| Output repeatability | Delivered | Opt-in full-stdout fingerprints across successful measured runs; separate per case, retained timing samples, failure exit when unstable. |
+| Suite discovery and selection | Delivered | Validate/list without executing; select exact names while retaining full preflight and suite order. |
+| Input-hint accuracy cleanup | Delivered | Identifier/word boundaries, yes/no suggestions, and scanf format extraction; no claim of general semantic analysis. |
+| Saved interactive input sessions | Future candidate | Explicitly save/replay named answer sequences, with overwrite protection and branch-aware editing. |
+| Numeric/JSON assertions | Future candidate | Structured values, absolute/relative tolerances, and clear NaN/infinity semantics. |
+| Warmup trend diagnostics | Future candidate | Report cache/startup trends separately without claiming process-local state persists. |
+| Paired build comparisons | Future candidate | Alternate builds, preserve pairing/order/seed, and compare matched workloads. |
+
+See [correctness and focused suites](correctness.md) and the runnable `examples/correctness-suite.json`. No new dependencies or timed-backend changes were needed. General semantic input discovery, random fuzzing, saved sessions, and tolerance-based comparisons are not implemented by these features.

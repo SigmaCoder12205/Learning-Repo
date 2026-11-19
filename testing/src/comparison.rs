@@ -121,6 +121,20 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
     {
         differences.push("setting cooldown_ms differs".into());
     }
+    if current["provenance"]["output_checks"] != baseline["provenance"]["output_checks"] {
+        differences.push(
+            "output expectations differ (older baselines may lack expectation hashes)".into(),
+        );
+    }
+    if current["settings"]["check_output_stability"]
+        .as_bool()
+        .unwrap_or(false)
+        != baseline["settings"]["check_output_stability"]
+            .as_bool()
+            .unwrap_or(false)
+    {
+        differences.push("setting check_output_stability differs".into());
+    }
     if current["command"].as_array().map(|a| a.get(1..))
         != baseline["command"].as_array().map(|a| a.get(1..))
     {

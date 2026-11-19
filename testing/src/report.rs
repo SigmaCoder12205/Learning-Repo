@@ -363,8 +363,10 @@ pub fn render(
             .iter()
             .any(|row| row["status"] == "output_limit")
     }) {
-        if report["settings"]["input"].is_null() {
-            out.push_str("Input: stdin is /dev/null (immediate EOF). For a program that needs input, pass --input FILE; the file is replayed for every invocation.\n");
+        if report["input_replay"]["source"] == "none"
+            || (report["input_replay"].is_null() && report["settings"]["input"].is_null())
+        {
+            out.push_str("Input: stdin is /dev/null (immediate EOF). Use --interactive in a terminal, repeat --input-line ANSWER, or pass --input FILE; answers are replayed for every invocation.\n");
         } else {
             out.push_str("Input: the replay file eventually reaches EOF; include the program's exit command if it needs one.\n");
         }
@@ -374,6 +376,8 @@ pub fn render(
         let _ = writeln!(out, "Note: {}", warning.as_str().unwrap());
     }
     out.push_str(&crate::insights::render(report));
+    out.push_str(&crate::inputs::render(report));
+    out.push_str(&crate::correctness::render(report));
     render_diagnostics(&mut out, report, view);
     out.push_str(&crate::profiles::render(report, view != View::Simple));
     if report["comparison"].is_object() {

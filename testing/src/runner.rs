@@ -38,6 +38,7 @@ pub struct RunOptions<'a> {
     pub env: &'a BTreeMap<OsString, OsString>,
     pub input: Option<&'a Path>,
     pub expected: Option<&'a Path>,
+    pub checks: crate::correctness::Checks<'a>,
     pub expected_exit: i32,
     pub timeout: f64,
     pub output_limit: f64,
@@ -120,25 +121,6 @@ fn seal(file: &File) -> std::io::Result<()> {
 
 fn cstring(value: &OsStr) -> Result<CString, String> {
     CString::new(value.as_bytes()).map_err(|_| "path or argument contains a NUL byte".into())
-}
-fn same_contents(a: &mut File, b: &mut File) -> std::io::Result<bool> {
-    if a.metadata()?.len() != b.metadata()?.len() {
-        return Ok(false);
-    }
-    a.seek(SeekFrom::Start(0))?;
-    let mut left = [0; 65536];
-    let mut right = [0; 65536];
-    let mut remaining = a.metadata()?.len();
-    while remaining > 0 {
-        let count = remaining.min(left.len() as u64) as usize;
-        a.read_exact(&mut left[..count])?;
-        b.read_exact(&mut right[..count])?;
-        if left[..count] != right[..count] {
-            return Ok(false);
-        }
-        remaining -= count as u64;
-    }
-    Ok(true)
 }
 
 pub fn run(
@@ -249,12 +231,13 @@ pub fn run_logged(
         if status == "ok" && measured.exit_code != opts.expected_exit {
             status = "unexpected_exit";
         }
-        if status == "ok" {
-            if let Some(path) = opts.expected {
-                if !same_contents(&mut output, &mut File::open(path)?)? {
-                    status = "output_mismatch";
-                }
-            }
+        let output_check = if status == "ok" {
+            crate::correctness::inspect(&mut output, opts.expected, opts.checks)?
+        } else {
+            Value::Null
+        };
+        if output_check["status"] == "failed" {
+            status = "output_mismatch";
         }
         error.seek(SeekFrom::Start(0))?;
         let mut preview = Vec::new();
@@ -272,8 +255,11 @@ pub fn run_logged(
                   } else { json!({"kind":"exit", "code":measured.exit_code}) },
                   "interrupt_signal": measured.interrupt_signal,
                   "stderr_preview": String::from_utf8_lossy(&preview)});
-        if status != "ok" {
-            // Read only after measurement. Failure context is independent of metric filtering.
+        if !output_check.is_null() {
+            row["output_check"] = output_check;
+        }
+        {
+            // Read only after measurement. Input-case reports also show successful output.
             output.seek(SeekFrom::Start(0))?;
             let mut stdout = Vec::new();
             output.take(512).read_to_end(&mut stdout)?;
@@ -327,6 +313,7 @@ mod tests {
             env: &env,
             input: None,
             expected: None,
+            checks: Default::default(),
             expected_exit: 0,
             timeout: 5.,
             output_limit: 1024.,

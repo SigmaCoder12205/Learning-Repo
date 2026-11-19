@@ -14,6 +14,8 @@ install: build
 	install -Dm644 docs/memory.md "$(DESTDIR)$(PREFIX)/share/doc/bench/memory.md"
 	install -Dm644 docs/python.md "$(DESTDIR)$(PREFIX)/share/doc/bench/python.md"
 	install -Dm644 docs/features.md "$(DESTDIR)$(PREFIX)/share/doc/bench/features.md"
+	install -Dm644 docs/correctness.md "$(DESTDIR)$(PREFIX)/share/doc/bench/correctness.md"
+	install -Dm644 docs/inputs.md "$(DESTDIR)$(PREFIX)/share/doc/bench/inputs.md"
 	install -Dm644 docs/roadmap.md "$(DESTDIR)$(PREFIX)/share/doc/bench/roadmap.md"
 
 test:
@@ -33,6 +35,7 @@ check: check-format lint
 check-c:
 	$(CC) -std=c11 -Wall -Wextra -Werror -fsyntax-only native/measure.c
 	$(CC) -std=c11 -Wall -Wextra -Werror -fsyntax-only native/helper.c native/launcher.c
+	$(CC) -std=c11 -Wall -Wextra -Werror -fsyntax-only native/interactive.c
 	$(CC) -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only include/bench_telemetry.h
 	$(CC) -std=c11 -Wall -Wextra -Werror -x c -fsyntax-only include/cppbench_telemetry.h
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -x c++ -fsyntax-only include/bench_telemetry.h

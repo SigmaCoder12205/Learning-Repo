@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "defaults": {
+    "runs": 3,
+    "warmup": 1,
+    "check_output_stability": true
+  },
+  "benchmarks": [
+    {
+      "name": "native-echo",
+      "executable": "/bin/cat",
+      "input_lines": [
+        "hello"
+      ],
+      "expect_text": "hello\n",
+      "expect_contains": [
+        "hello"
+      ]
+    },
+    {
+      "name": "python-hash",
+      "python": "workload.py",
+      "args": [
+        "--size",
+        "1"
+      ],
+      "expect_text": "1b32c28cb38c05480eccc1bd60ff97029b57a05c96718b96dad7e9d84894f549\n"
+    }
+  ]
+}

@@ -115,6 +115,14 @@ fn section(report: &Value) -> String {
     }
     out.push_str("</div>");
     let insights = crate::insights::render(report);
+    let inputs = crate::inputs::render(report) + &crate::correctness::render(report);
+    if !inputs.is_empty() {
+        let _ = write!(
+            out,
+            "<details open><summary>Inputs and output</summary><pre>{}</pre></details>",
+            escape(&inputs)
+        );
+    }
     if !insights.is_empty() {
         let _ = write!(out, "<details open><summary>Runtime and measurement insights</summary><pre>{}</pre></details>", escape(&insights));
     }

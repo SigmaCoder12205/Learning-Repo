@@ -16,6 +16,7 @@ pub fn check_tools() -> Result<Value, String> {
         env: &env,
         input: None,
         expected: None,
+        checks: Default::default(),
         expected_exit: 0,
         timeout: 10.,
         output_limit: 4. * 1048576.,

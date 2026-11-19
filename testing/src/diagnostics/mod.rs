@@ -72,6 +72,10 @@ pub fn execute(
         env: &env,
         input: base.input,
         expected: base.expected,
+        checks: crate::correctness::Checks {
+            fingerprint: false,
+            ..base.checks
+        },
         expected_exit: base.expected_exit,
         timeout: args.diagnostic_timeout,
         output_limit: base.output_limit,
