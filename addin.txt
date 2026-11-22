@@ -117,3 +117,15 @@ char ch = 'a';
 char upper_ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
 
 include #include <cctype>
+
+------------------------------------------------------------------------------------------------------------------------------------------
+how to set a miniumum value in the rand() function (also a max)
+
+int num = (rand() % (max - min + 1)) + min;
+
+------------------------------------------------------------------------------------------------------------------------------------------
+how to round a number in C++
+
+#include <cmath>
+
+double rounded = std::round(num); 
