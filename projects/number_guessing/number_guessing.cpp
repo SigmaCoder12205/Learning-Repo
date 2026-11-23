@@ -1,6 +1,6 @@
 // Plan
-// try to have as little code in main as possible 
-// meaning set most of the code into functions 
+// Comeback: Seperate the code into functions and other files like (Dynamic Value) so it's a useable picece of code
+//           I don't want to always add it to the top of my file
 // Features to add: count of goes, settings etc 
 
 #include <iostream>
@@ -9,36 +9,13 @@
 #include <variant>
 #include <sstream>
 #include <cmath>
+#include "../dynamic_value.h"
 
-int generate();
-
-using DynamicValue = std::variant<int, double, char, std::string>;
-
-DynamicValue parseInput(const std::string &input){
-    if(input.length() == 1 && !std::isdigit(static_cast<unsigned char>(input[0]))){
-        return input[0];
-    }
-
-    std::istringstream intStream(input);
-    int int_value;
-    
-    if((intStream >> int_value) && (intStream >> std::ws).eof()){
-        return int_value;
-    }
-
-    std::istringstream doubleStream(input);
-    double double_value;
-
-    if((doubleStream >> double_value) && (doubleStream >> std::ws).eof()){
-        return double_value;
-    }
-
-    return input;
-}
+int generate(int max, int min = 0);
 
 int main(){
     srand(time(0));
-    int user;
+    int user = 0;
     std::string temp;
     int max = 100;
     int min = 0;
@@ -50,7 +27,7 @@ int main(){
 
     DynamicValue value = parseInput(temp);
 
-    if(std::holds_alternative<int>(value)){
+    if(std::holds_alternative<int>(value)){ // Find a way to turn this into a function
         int int_value = std::get<int>(value);
         user = int_value;
     }
@@ -82,6 +59,6 @@ int main(){
     return 0;
 }
 
-int generate(int max, int min = 0){
+int generate(int max, int min){
     return (rand() % (max - min + 1)) + min;
 }
