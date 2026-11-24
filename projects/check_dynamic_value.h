@@ -1,6 +1,9 @@
-#pragma once
+#pragma once 
 
-#include <vector>
 #include <variant>
+#include "dynamic_value.h"
 
-void check(std::vector<std::string> allowed, std::variant<int, double, char, std::string> value);
+template<typename ... AllowedTypes>
+bool isAllowed(const DynamicValue &value){
+    return (std::holds_alternative<AllowedTypes>(value) || ...);
+}
