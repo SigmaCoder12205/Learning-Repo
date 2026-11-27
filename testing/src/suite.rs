@@ -150,6 +150,32 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                         );
                     }
                 }
+                "validate" => {
+                    // A string program, or [program, arg...]; relative program paths resolve
+                    // from the suite file like `interpreter`; arguments are passed verbatim.
+                    let parts: Vec<&str> = match &value {
+                        Value::String(program) => vec![program.as_str()],
+                        Value::Array(items) => items
+                            .iter()
+                            .map(|v| v.as_str().ok_or("validate must contain strings"))
+                            .collect::<Result<_, _>>()?,
+                        _ => return Err("validate must be a string or an array of strings".into()),
+                    };
+                    let (program, rest) = parts.split_first().ok_or("validate needs a program")?;
+                    let path = PathBuf::from(program);
+                    argv.push(flag.into());
+                    argv.push(
+                        if !path.is_absolute() && path.components().count() > 1 {
+                            root.join(path)
+                        } else {
+                            path
+                        }
+                        .into_os_string(),
+                    );
+                    for arg in rest {
+                        argv.push(format!("--validate-arg={arg}").into());
+                    }
+                }
                 "interpreter" => {
                     let path = PathBuf::from(value.as_str().ok_or("interpreter must be a string")?);
                     argv.push(flag.into());
@@ -189,7 +215,7 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
                 "cooldown_ms" | "overhead_runs" | "name" | "runs" | "warmup" | "timeout"
                 | "output_limit" | "expect_exit" | "units" | "metrics" | "max_runs"
                 | "precision" | "min_time" | "cpu_affinity" | "diagnostic_timeout"
-                | "perf_events" | "gpu_interval_ms" | "gpu_device" => {
+                | "perf_events" | "gpu_interval_ms" | "gpu_device" | "validate_timeout" => {
                     if !value.is_string() && !value.is_number() {
                         return Err(format!("invalid value for {key}"));
                     }
@@ -227,7 +253,9 @@ pub fn load(path: &Path) -> Result<Vec<Cli>, String> {
         if args.input_source.is_some() {
             crate::input_hints::discover(&args)?;
         }
-        crate::python::prepare(&args, &crate::python::environment(&args)?)?;
+        let env = crate::python::environment(&args)?;
+        crate::python::prepare(&args, &env)?;
+        crate::correctness::validator(&args, &env).map_err(|e| format!("benchmark {name}: {e}"))?;
         let binary = args
             .executable
             .as_deref()

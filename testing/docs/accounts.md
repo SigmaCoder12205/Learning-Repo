@@ -2,6 +2,8 @@
 
 bench 0.8 uses **Keycloak** for account records, registration, password handling, login pages, account management, and revocation. PostgreSQL stores the service's data. The Rust CLI is only an OAuth client; it no longer creates accounts or hashes passwords. Benchmarking stays Rust/C and requires neither login nor a running account service.
 
+The `bench account` commands are an optional Cargo feature, off by default. Build them with `make install FEATURES=accounts` or `cargo build --locked --features accounts`. Without the feature, the HTTP/OAuth dependencies are not compiled.
+
 ## Start locally
 
 Requirements: Docker with Compose, permission to access the Docker daemon, and a browser. `xdg-open` opens the browser automatically when available. No Java, PostgreSQL, Node, or Python runtime needs to be installed for the application: Keycloak and PostgreSQL run in containers.
@@ -10,7 +12,7 @@ From this checkout:
 
 ```bash
 ./auth/scripts/setup.sh
-make install
+make install FEATURES=accounts
 bench account register
 bench account whoami
 bench account logout
@@ -83,7 +85,7 @@ The Rust password database and seven-day login implementation have been removed.
 For the optional integration test, start the local service, build the CLI, and run:
 
 ```bash
-cargo build --locked
+cargo build --locked --features accounts
 python3 auth/tests/smoke.py --restart
 ```
 

@@ -1,14 +1,14 @@
 # bench project handoff
 
-Last updated: **2026-11-19 UTC**. This is the continuity record requested by the user for a new Codex chat.
+Last updated: **2026-11-28 UTC**. This is the continuity record requested by the user for a new Codex chat.
 
 This document combines the available conversation history with the checked-in implementation and guides. It records the sequence and decisions we can establish; it is not a verbatim transcript of every earlier assistant response. Where exact early implementation details are unavailable, they are not invented. Current source and new user instructions take precedence over this snapshot.
 
 ## Read this first
 
 - Project: **bench**, formerly **cppbench**, a Linux CLI for benchmarking native executables and Python scripts.
-- Checkout: `/home/arch/Projects/Learning-Repo/testing`, inside the larger `Learning-Repo` Git repository.
-- Current package version: **0.13.0**; installation verification is recorded in history item 14. The engine remains **Rust + C**; Python is a supported workload, not a replacement implementation.
+- Checkout: `/home/ddogflyer/Projects/general-coding/testing`, inside the larger `general-coding` Git repository (previously `/home/arch/Projects/Learning-Repo/testing`).
+- Current package version: **0.14.0** (history item 16). Installation was not rerun for 0.14. The engine remains **Rust + C**; Python is a supported workload, not a replacement implementation.
 - Main command: `bench ./program` or `bench script.py`. Default report is simple; `--intermediate` and `--advanced` add detail.
 - Installation: `~/.local/bin/bench`; `~/.local/bin/cppbench` is a compatibility symlink to `bench`.
 - Account authority: local **Keycloak + PostgreSQL**, not a Rust password database. Benchmarks do not require login or Docker.
@@ -166,6 +166,24 @@ The user requested further brainstorming, cleanup, and implementation. The selec
 - Cleanup: centralized repeated CLI mode-option validation, moved file-output comparison into the reusable correctness module, and fixed input-hint false matches (`print` versus `int`, `message` versus `age`), yes/no suggestions, and scanf format extraction when a preceding printed string exists. `sscanf` no longer claims stdin input. Heuristics remain limited; this is not semantic type analysis.
 - Verification: `make verify` passed **108 tests** (27 unit, 6 accounts, 16 CLI, 9 correctness, 10 diagnostics, 6 experiments, 8 features, 12 inputs, 7 profiles, 7 Python), Rust formatting, Clippy with warnings denied, and C/C++ checks. New coverage includes binary and buffer-boundary stdout checks, mismatch offsets, changes beyond previews, warmup/stderr exclusions, independent matrix stability, complete/partial recovery, HTML/history, suite listing/selection/preflight, comparison compatibility, Python calibration exemptions, and hint regressions. Existing diagnostic fixtures now verify assertion forwarding and heaptrack exemptions. The example suite listed and ran successfully. No live account service or hardware-profiler checks were needed.
 
+### 15. Accounts feature flag and project cleanup, 2026-11-27
+
+- The account client is now behind the optional `accounts` Cargo feature, off by default. It makes `reqwest`, `base64` and `zeroize` optional. The default build has no `bench account` subcommand. `make install FEATURES=accounts` restores it. `Cargo.lock` is unchanged.
+- `make lint` and `make test` now run for both the default build and `--all-features`. `tests/accounts.rs` is compiled only with the feature.
+- Stale `Learning-Repo` checkout paths were updated. Two no-op `.gitignore` lines for `docs/ideas/money/` were removed. That path belongs to the parent repository, where the file is tracked.
+- Verified: `make verify` passed on Rust 1.100.0, with all tests passing in both feature sets.
+
+### 16. Validators in any language and pandas/numpy analysis in 0.14, 2026-11-28
+
+The user asked for a brainstorm, then implementation of: checks users write in any language, and Python with pandas/numpy for data analytics. The options and decisions are in `docs/roadmap.md`.
+
+- `--validate PROGRAM` plus `--validate-arg` and `--validate-timeout` (suite keys `validate` and `validate_timeout`). After each successful invocation, the validator runs through the same C launcher, outside measured time. stdin is the target's stdout, and `BENCH_*` variables give input/stdout/stderr paths, exit code and wall time. Exit 0 passes. A failure gives the new run status `validation_failed` and exit code 1. `bench-metric NAME VALUE [UNIT]` lines become metrics, summarized as `validation_metrics`. Program paths are made absolute but not canonicalized, so venv interpreters keep their packages. Interrupts propagate. Guide: `docs/validators.md`.
+- `bench history export` writes long-format CSV/JSONL (`source,recorded_unix_seconds,case,run,status,kind,metric,unit,value`).
+- `bench analyze` runs the embedded `python/bench_analysis.py` (pandas/numpy, optional matplotlib) with `--interpreter`. It reports summaries, bootstrap median intervals, change verdicts and plots. A missing pandas gives install instructions and exit 2. The engine still needs no Python. Guide: `docs/analytics.md`.
+- Examples: `examples/validators/` (Python, shell, C++, analytics check), `examples/analytics_workload.py`, `examples/requirements-analytics.txt`.
+- Report schema stays version 3. The changes are additive: `settings.validator`, per-run `validation`, `validation_metrics`, and the new status value.
+- Verified: `make verify` passes, and the tests do not need pandas. The real pandas path was checked with a scratch venv (pandas 3.1.1, numpy 2.5.5, matplotlib) via `BENCH_TEST_PANDAS_PYTHON`, plus manual runs of analyze/plot, the analytics workload, and Ctrl-C during a validator (exit 130).
+
 ## Current command and report contract
 
 ```bash
@@ -311,7 +329,7 @@ Build: Linux, Rust **1.89+**, Cargo, C compiler/linker. Tests also require g++, 
 Optional diagnostics use `perf`, `intel_gpu_top`, `heaptrack`, `heaptrack_print`, `valgrind`, and `strace`. Availability and counter permissions are separate. The user previously installed tools and changed Intel monitoring capability, but this is not a current permission guarantee. Accounts need Docker + Compose and a browser; `xdg-open` is optional convenience. Do not require accounts or optional profilers for ordinary benchmarks/tests.
 
 ```bash
-cd /home/arch/Projects/Learning-Repo/testing
+cd /home/ddogflyer/Projects/general-coding/testing
 git status --short
 make fmt
 make verify
@@ -322,11 +340,11 @@ bench examples/workload.py --runs 2 --warmup 0 --intermediate
 bench --suite examples/python-suite.json
 ```
 
-`make verify` runs formatting, `cargo clippy --locked --all-targets -- -D warnings`, C/header syntax checks with warnings denied, and `cargo test --locked`. `make install` builds release with LTO, installs the binary, compatibility symlink, both headers, and profile/account/memory/Python/feature/input/correctness guides and roadmap under `~/.local`. `PREFIX` and `DESTDIR` are supported. Release builds can take a few minutes. No Cargo dependency additions were needed for Python support.
+`make verify` runs formatting, `cargo clippy --locked --all-targets -- -D warnings` for both the default build and `--all-features`, C/header syntax checks with warnings denied, and `cargo test --locked` for both feature sets. `make install` builds release with LTO, installs the binary, compatibility symlink, both headers, and profile/account/memory/Python/feature/input/correctness guides and roadmap under `~/.local`. `PREFIX` and `DESTDIR` are supported. Release builds can take a few minutes. No Cargo dependency additions were needed for Python support.
 
 Focused tests: `cargo test --locked --test python`, `--test cli`, `--test profiles`, `--test experiments`, `--test diagnostics`, `--test accounts`; parser/statistics/measurement tests also live in their Rust modules. Run validation appropriate to a change rather than rerunning expensive checks without a reason.
 
-Optional real account-service integration: `cargo build --locked`, then `python3 auth/tests/smoke.py --restart` with the development service available. It creates/cleans a unique test account and restarts Keycloak, so it is not a read-only diagnostic. Ordinary tests mock HTTP and require no Docker/browser. No real account-service integration was rerun for the rename.
+Optional real account-service integration: `cargo build --locked --features accounts`, then `python3 auth/tests/smoke.py --restart` with the development service available. It creates/cleans a unique test account and restarts Keycloak, so it is not a read-only diagnostic. Ordinary tests mock HTTP and require no Docker/browser. No real account-service integration was rerun for the rename.
 
 Previous 77-test breakdown: 26 unit tests, 6 accounts, 16 CLI, 10 diagnostics, 5 experiments, 7 profiles, 7 Python. Python tests cover arguments/input/environment/cwd, virtual environments, invalid options, failures/timeouts/output limits, mixed-suite preflight, comparisons, and telemetry. Compatibility tests cover the old header and environment variables.
 

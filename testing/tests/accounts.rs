@@ -1,4 +1,5 @@
 //! CLI OAuth contract, tested without Docker or a browser.
+#![cfg(feature = "accounts")]
 use serde_json::{json, Value};
 use std::{
     fs,

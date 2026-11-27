@@ -45,3 +45,20 @@ The next priorities came from the input-testing workflow: knowing that a program
 | Paired build comparisons | Future candidate | Alternate builds, preserve pairing/order/seed, and compare matched workloads. |
 
 See [correctness and focused suites](correctness.md) and the runnable `examples/correctness-suite.json`. No new dependencies or timed-backend changes were needed. General semantic input discovery, random fuzzing, saved sessions, and tolerance-based comparisons are not implemented by these features.
+
+## Custom checks and data analysis brainstorm, 0.14
+
+Updated 2026-11-28. The user asked for checks written in any language and for pandas/numpy data analysis. These were the brainstorm options:
+
+| Idea | State | Scope |
+| --- | --- | --- |
+| Validators in any language (`--validate`) | Delivered | Executable check per successful run, outside timing. stdin is target stdout, exit 0 passes, and environment variables describe the run. Suites support it too. |
+| Validator metrics | Delivered | `bench-metric NAME VALUE [UNIT]` lines become per-run metrics, summarized in `validation_metrics`, text and HTML. |
+| Long-format export (`bench history export`) | Delivered | CSV/JSONL, one row per measured run and metric, oldest history first, for pandas, R or DuckDB. |
+| `bench analyze` with pandas/numpy | Delivered | Embedded script with a user-chosen interpreter. Medians, bootstrap intervals, outliers, oldest-to-newest change verdicts, optional matplotlib plot. |
+| pandas/numpy workload example | Delivered | `examples/analytics_workload.py`, with a validator for its answer. |
+| Regression gates on validator metrics | Future candidate | `--regression validator.NAME=PCT` needs a direction (higher or lower is better) per metric. |
+| Parquet/Arrow export | Future candidate | Would add a large dependency. CSV/JSONL cover pandas today. |
+| Notebook export | Future candidate | Generate a Jupyter notebook preloaded with a run's data and plots. |
+| Rank-based A/B test in Rust | Future candidate | Mann-Whitney or permutation test for two reports without Python. |
+| JSON validator protocol | Future candidate | Structured verdicts, multiple named checks per run, and partial credit. |

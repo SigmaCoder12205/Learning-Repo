@@ -1,8 +1,10 @@
 PREFIX ?= $(HOME)/.local
+# Optional Cargo features for build/install, e.g. `make install FEATURES=accounts`.
+FEATURES ?=
 
 .PHONY: build install test fmt check-format lint check check-c verify
 build:
-	cargo build --release --locked
+	cargo build --release --locked --features "$(FEATURES)"
 
 install: build
 	install -Dm755 target/release/bench "$(DESTDIR)$(PREFIX)/bin/bench"
@@ -16,10 +18,13 @@ install: build
 	install -Dm644 docs/features.md "$(DESTDIR)$(PREFIX)/share/doc/bench/features.md"
 	install -Dm644 docs/correctness.md "$(DESTDIR)$(PREFIX)/share/doc/bench/correctness.md"
 	install -Dm644 docs/inputs.md "$(DESTDIR)$(PREFIX)/share/doc/bench/inputs.md"
+	install -Dm644 docs/validators.md "$(DESTDIR)$(PREFIX)/share/doc/bench/validators.md"
+	install -Dm644 docs/analytics.md "$(DESTDIR)$(PREFIX)/share/doc/bench/analytics.md"
 	install -Dm644 docs/roadmap.md "$(DESTDIR)$(PREFIX)/share/doc/bench/roadmap.md"
 
 test:
 	cargo test --locked
+	cargo test --locked --all-features
 
 fmt:
 	cargo fmt
@@ -29,6 +34,7 @@ check-format:
 
 lint:
 	cargo clippy --locked --all-targets -- -D warnings
+	cargo clippy --locked --all-targets --all-features -- -D warnings
 
 check: check-format lint
 

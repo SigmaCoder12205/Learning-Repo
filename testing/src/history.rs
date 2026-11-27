@@ -40,6 +40,18 @@ enum Action {
     },
     /// Copy a successful saved run into a new named baseline; existing pins are never replaced
     Pin { id: String, name: String },
+    /// Export measured runs as one row per run and metric, for pandas, R or spreadsheets
+    Export {
+        /// csv (header row) or jsonl (one JSON object per line)
+        #[arg(long, default_value = "csv", value_parser = ["csv", "jsonl"])]
+        format: String,
+        /// Newest saved runs to include
+        #[arg(long, default_value = "50", value_parser = clap::value_parser!(u32).range(1..=1000))]
+        limit: u32,
+        /// Write to a file instead of stdout
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 pub(crate) fn location(path: Option<&Path>) -> Result<PathBuf, String> {
@@ -185,6 +197,45 @@ fn eligible(report: &Value) -> bool {
         }
 }
 
+/// Saved IDs in the runs or pins area: newest first for runs, by name for pins.
+fn ids(root: &Path, pins: bool) -> Result<Vec<String>, String> {
+    let directory = area(root, pins, false)?;
+    let mut names = Vec::new();
+    match fs::read_dir(&directory) {
+        Ok(entries) => {
+            for entry in entries {
+                let path = entry.map_err(|e| e.to_string())?.path();
+                if path.extension().is_some_and(|e| e == "json") {
+                    names.push(
+                        path.file_stem()
+                            .and_then(|s| s.to_str())
+                            .ok_or("invalid history filename")?
+                            .to_string(),
+                    );
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    names.sort();
+    if !pins {
+        names.reverse();
+    }
+    Ok(names)
+}
+
+/// The newest saved runs with their reports, oldest first for time-series analysis.
+pub(crate) fn newest(root: &Path, limit: usize) -> Result<Vec<(String, Value)>, String> {
+    let mut runs = ids(root, false)?
+        .into_iter()
+        .take(limit)
+        .map(|id| read(root, &id, false).map(|report| (id, report)))
+        .collect::<Result<Vec<_>, String>>()?;
+    runs.reverse();
+    Ok(runs)
+}
+
 pub(crate) fn run(options: Options) -> Result<i32, String> {
     let root = location(options.dir.as_deref())?;
     match options.action {
@@ -211,31 +262,23 @@ pub(crate) fn run(options: Options) -> Result<i32, String> {
                 println!("Pinned {id} as {name}. Compare with --compare-pin {name}.");
             }
         }
+        Action::Export {
+            format,
+            limit,
+            output,
+        } => {
+            let rows: Vec<Value> = newest(&root, limit as usize)?
+                .iter()
+                .flat_map(|(id, report)| crate::analysis::tidy(report, id))
+                .collect();
+            let text = crate::analysis::render(&rows, &format);
+            match output {
+                Some(path) => fs::write(&path, text).map_err(|e| e.to_string())?,
+                None => print!("{text}"),
+            }
+        }
         Action::List { limit, pins } => {
-            let directory = area(&root, pins, false)?;
-            let mut names = Vec::new();
-            match fs::read_dir(&directory) {
-                Ok(entries) => {
-                    for entry in entries {
-                        let path = entry.map_err(|e| e.to_string())?.path();
-                        if path.extension().is_some_and(|e| e == "json") {
-                            names.push(
-                                path.file_stem()
-                                    .and_then(|s| s.to_str())
-                                    .ok_or("invalid history filename")?
-                                    .to_string(),
-                            );
-                        }
-                    }
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(e.to_string()),
-            }
-            names.sort();
-            if !pins {
-                names.reverse();
-            }
-            let entries = names.into_iter().take(limit as usize).map(|id| {
+            let entries = ids(&root, pins)?.into_iter().take(limit as usize).map(|id| {
                 let report = read(&root, &id, pins)?;
                 Ok(json!({"id":id,"name":report["name"],"recorded_unix_seconds":report["history"]["recorded_unix_seconds"],
                     "completed":report["completed"],"exit_code":crate::comparison::exit_code(&report),

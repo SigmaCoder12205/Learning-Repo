@@ -4,10 +4,13 @@ use clap::{Parser, Subcommand};
 use std::{ffi::OsString, path::PathBuf};
 #[derive(Subcommand, Debug, Clone)]
 pub(crate) enum Command {
+    #[cfg(feature = "accounts")]
     /// Keycloak accounts and persistent CLI sessions
     Account(crate::accounts::Options),
     /// List saved runs, inspect reports, and pin named baselines
     History(crate::history::Options),
+    /// Statistics over saved reports with pandas and numpy (Python needed only here)
+    Analyze(crate::analysis::Options),
 }
 fn positive(s: &str) -> Result<f64, String> {
     let n: f64 = s.parse().map_err(|_| "expected a number")?;
@@ -128,6 +131,20 @@ pub(crate) struct Cli {
     /// Require identical stdout across at least two successful measured runs
     #[arg(long)]
     pub(crate) check_output_stability: bool,
+    /// Your own check program in any language; gets target stdout on stdin, exit 0 = pass
+    #[arg(long, value_name = "PROGRAM")]
+    pub(crate) validate: Option<PathBuf>,
+    /// Repeatable argument for --validate, e.g. --validate python3 --validate-arg check.py
+    #[arg(
+        long,
+        allow_hyphen_values = true,
+        requires = "validate",
+        value_name = "ARG"
+    )]
+    pub(crate) validate_arg: Vec<OsString>,
+    /// Deadline in seconds for each --validate invocation
+    #[arg(long, default_value = "30", value_parser = positive)]
+    pub(crate) validate_timeout: f64,
     #[arg(long, default_value = "0", allow_negative_numbers = true)]
     pub(crate) expect_exit: i32,
     #[arg(long, default_value = ".")]

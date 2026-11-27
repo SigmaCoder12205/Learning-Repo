@@ -3,9 +3,12 @@ use crate::cli::Cli;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
+    ffi::OsString,
     fs::File,
     io::{self, Read, Seek, SeekFrom},
-    path::Path,
+    os::fd::AsRawFd,
+    path::{Path, PathBuf},
 };
 
 #[derive(Clone, Copy, Default)]
@@ -13,6 +16,7 @@ pub(crate) struct Checks<'a> {
     pub exact: Option<&'a str>,
     pub contains: &'a [String],
     pub fingerprint: bool,
+    pub validator: Option<&'a Validator>,
 }
 impl<'a> Checks<'a> {
     pub fn from_args(args: &'a Cli) -> Self {
@@ -20,8 +24,236 @@ impl<'a> Checks<'a> {
             exact: args.expect_text.as_deref(),
             contains: &args.expect_contains,
             fingerprint: args.check_output_stability,
+            validator: None,
         }
     }
+}
+
+/// A user-written check program in any language, run after each successful invocation.
+#[derive(Debug, Clone)]
+pub(crate) struct Validator {
+    pub command: Vec<OsString>,
+    pub timeout: f64,
+}
+
+const VALIDATOR_OUTPUT_LIMIT: u64 = 64 * 1024;
+const MAX_VALIDATOR_METRICS: usize = 32;
+
+/// Resolve `--validate` once, before any target runs, so a typo fails early.
+pub(crate) fn validator(
+    args: &Cli,
+    env: &BTreeMap<OsString, OsString>,
+) -> Result<Option<Validator>, String> {
+    let Some(program) = &args.validate else {
+        return Ok(None);
+    };
+    // Absolute but not canonical: a virtual environment's `bin/python` symlink must
+    // keep its own path, or the interpreter loses the environment's packages.
+    let resolved: PathBuf = if program.components().count() > 1 || program.is_absolute() {
+        std::path::absolute(program)
+            .map_err(|e| format!("--validate {}: {e}", program.display()))?
+    } else {
+        env.get(std::ffi::OsStr::new("PATH"))
+            .into_iter()
+            .flat_map(std::env::split_paths)
+            .map(|dir| dir.join(program))
+            .find(|candidate| candidate.is_file())
+            .ok_or_else(|| format!("--validate: {} is not on PATH", program.display()))?
+    };
+    use std::os::unix::fs::PermissionsExt;
+    let metadata = resolved
+        .metadata()
+        .map_err(|e| format!("--validate {}: {e}", resolved.display()))?;
+    if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 {
+        return Err(format!(
+            "--validate {} must be an executable file; for scripts use a shebang or e.g. --validate python3 --validate-arg check.py",
+            resolved.display()
+        ));
+    }
+    let mut command = vec![resolved.into_os_string()];
+    command.extend(args.validate_arg.iter().cloned());
+    Ok(Some(Validator {
+        command,
+        timeout: args.validate_timeout,
+    }))
+}
+
+fn valid_metric_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.'))
+}
+
+/// Parse validator stdout: `bench-metric NAME VALUE [UNIT]` lines become custom
+/// metrics; every other line is part of the human-readable message.
+fn parse_validator_output(text: &str) -> Result<(Value, Value, String), String> {
+    let mut metrics = serde_json::Map::new();
+    let mut units = serde_json::Map::new();
+    let mut message = String::new();
+    for line in text.lines() {
+        let mut fields = line.split_whitespace();
+        if fields.next() != Some("bench-metric") {
+            if !line.trim().is_empty() {
+                message.push_str(line.trim_end());
+                message.push('\n');
+            }
+            continue;
+        }
+        let (Some(name), Some(value)) = (fields.next(), fields.next()) else {
+            return Err(format!(
+                "malformed metric line {line:?}; expected `bench-metric NAME VALUE [UNIT]`"
+            ));
+        };
+        let unit = fields.next().unwrap_or("");
+        if fields.next().is_some() || !valid_metric_name(name) || unit.len() > 32 {
+            return Err(format!("malformed metric line {line:?}; names use 1..64 letters, digits, '_', '-' or '.', and units are one word"));
+        }
+        let value: f64 = value
+            .parse()
+            .ok()
+            .filter(|v: &f64| v.is_finite())
+            .ok_or_else(|| format!("metric {name} needs a finite number, got {value:?}"))?;
+        if metrics.insert(name.into(), json!(value)).is_some() {
+            return Err(format!("metric {name} was reported more than once"));
+        }
+        if metrics.len() > MAX_VALIDATOR_METRICS {
+            return Err(format!(
+                "validators may report at most {MAX_VALIDATOR_METRICS} metrics"
+            ));
+        }
+        units.insert(name.into(), json!(unit));
+    }
+    Ok((Value::Object(metrics), Value::Object(units), message))
+}
+
+/// Run the user's validator outside measured time. Its stdin is the target's full stdout.
+pub(crate) fn run_validator(
+    validator: &Validator,
+    opts: &crate::runner::RunOptions<'_>,
+    stdout: &File,
+    stderr: &File,
+    exit_code: i32,
+    wall: f64,
+) -> Result<Value, String> {
+    let pid = std::process::id();
+    let own = |file: &File| format!("/proc/{pid}/fd/{}", file.as_raw_fd());
+    let mut env = opts.env.clone();
+    for (key, value) in [
+        ("BENCH_STDOUT_FILE", own(stdout)),
+        ("BENCH_STDERR_FILE", own(stderr)),
+        (
+            "BENCH_INPUT_FILE",
+            opts.input
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "/dev/null".into()),
+        ),
+        ("BENCH_TARGET_EXIT_CODE", exit_code.to_string()),
+        ("BENCH_TARGET_WALL_SECONDS", format!("{wall:.9}")),
+    ] {
+        env.insert(key.into(), value.into());
+    }
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let (out, err) = (dir.path().join("stdout"), dir.path().join("stderr"));
+    let target_stdout = format!("/proc/self/fd/{}", stdout.as_raw_fd());
+    let row = crate::runner::run_logged(
+        &validator.command,
+        &crate::runner::RunOptions {
+            cwd: opts.cwd,
+            env: &env,
+            input: Some(Path::new(&target_stdout)),
+            expected: None,
+            checks: Default::default(),
+            expected_exit: 0,
+            timeout: validator.timeout,
+            output_limit: VALIDATOR_OUTPUT_LIMIT as f64 * 16.0,
+            units: 1.0,
+            affinity: &[],
+        },
+        &[0],
+        Some((&out, &err)),
+    )?;
+    let mut text = String::new();
+    File::open(&out)
+        .and_then(|f| f.take(VALIDATOR_OUTPUT_LIMIT).read_to_string(&mut text))
+        .map_err(|e| format!("validator stdout: {e}"))?;
+    let mut result = json!({"exit_code": row["exit_code"], "wall_seconds": row["metrics"]["wall"],
+        "metrics": {}, "metric_units": {}, "message": "", "stderr_preview": row["stderr_preview"]});
+    let status = match row["status"].as_str() {
+        Some("ok") => "passed",
+        Some("unexpected_exit") => "failed",
+        Some("interrupted") => {
+            result["interrupt_signal"] = row["interrupt_signal"].clone();
+            "interrupted"
+        }
+        Some(other) => {
+            result["reason"] = json!(format!("validator {other}"));
+            "error"
+        }
+        None => "error",
+    };
+    result["status"] = json!(status);
+    match parse_validator_output(&text) {
+        Ok((metrics, units, mut message)) => {
+            if message.len() > 1024 {
+                // Cut at a UTF-8 boundary (floor_char_boundary needs a newer Rust than 1.89).
+                let cut = (0..=1024)
+                    .rev()
+                    .find(|&i| message.is_char_boundary(i))
+                    .unwrap_or(0);
+                message.truncate(cut);
+            }
+            result["metrics"] = metrics;
+            result["metric_units"] = units;
+            result["message"] = json!(message);
+        }
+        Err(reason) if status == "passed" => {
+            result["status"] = json!("error");
+            result["reason"] = json!(reason);
+        }
+        Err(_) => {}
+    }
+    Ok(result)
+}
+
+/// Summarize validator metrics across successful measured runs.
+pub(crate) fn summarize_validation(report: &mut Value) {
+    if !report["settings"]["validator"].is_object() {
+        return;
+    }
+    let mut values: BTreeMap<String, (String, Vec<f64>)> = BTreeMap::new();
+    for row in report["runs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|r| r["status"] == "ok")
+    {
+        let validation = &row["validation"];
+        for (name, value) in validation["metrics"].as_object().into_iter().flatten() {
+            if let Some(value) = value.as_f64() {
+                let entry = values.entry(name.clone()).or_insert_with(|| {
+                    (
+                        validation["metric_units"][name]
+                            .as_str()
+                            .unwrap_or("")
+                            .to_string(),
+                        Vec::new(),
+                    )
+                });
+                entry.1.push(value);
+            }
+        }
+    }
+    let summary: serde_json::Map<_, _> = values
+        .into_iter()
+        .map(|(name, (unit, samples))| {
+            let mut stats = crate::stats::summarize_basic(samples);
+            stats["unit"] = json!(unit);
+            (name, stats)
+        })
+        .collect();
+    report["validation_metrics"] = Value::Object(summary);
 }
 
 pub(crate) fn validate(args: &Cli) -> Result<(), String> {
@@ -224,6 +456,56 @@ pub(crate) fn refresh(report: &mut Value) {
 pub(crate) fn render(report: &Value) -> String {
     use std::fmt::Write;
     let mut out = String::new();
+    if let Some(metrics) = report["validation_metrics"]
+        .as_object()
+        .filter(|m| !m.is_empty())
+    {
+        out.push_str("Validator metrics (successful measured runs):\n");
+        for (name, stats) in metrics {
+            let unit = stats["unit"].as_str().unwrap_or("");
+            let _ = writeln!(
+                out,
+                "  {name}: mean {}{} | median {} | min {} | max {} | n={}",
+                stats["mean"],
+                if unit.is_empty() {
+                    String::new()
+                } else {
+                    format!(" {unit}")
+                },
+                stats["median"],
+                stats["min"],
+                stats["max"],
+                stats["count"]
+            );
+        }
+    }
+    for phase in ["warmups", "runs"] {
+        for row in report[phase]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|r| r["status"] == "validation_failed")
+        {
+            let validation = &row["validation"];
+            let _ = write!(
+                out,
+                "Validator {} ({phase} {}): exit {}",
+                validation["status"].as_str().unwrap_or("failed"),
+                row["run"],
+                validation["exit_code"]
+            );
+            if let Some(reason) = validation["reason"].as_str() {
+                let _ = write!(out, "; {reason}");
+            }
+            let message = validation["message"].as_str().unwrap_or("").trim();
+            let stderr = validation["stderr_preview"].as_str().unwrap_or("").trim();
+            for text in [message, stderr].into_iter().filter(|t| !t.is_empty()) {
+                let first = text.lines().next().unwrap_or("");
+                let _ = write!(out, "; {}", json!(first)); // JSON-escaped for terminals
+            }
+            out.push('\n');
+        }
+    }
     if report["output_stability"].is_object() {
         let _ = writeln!(
             out,

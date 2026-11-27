@@ -239,6 +239,29 @@ pub fn run_logged(
         if output_check["status"] == "failed" {
             status = "output_mismatch";
         }
+        let mut validation = Value::Null;
+        let mut interrupt_signal = measured.interrupt_signal;
+        if status == "ok" {
+            if let Some(validator) = opts.checks.validator {
+                validation = crate::correctness::run_validator(
+                    validator,
+                    opts,
+                    &output,
+                    &error,
+                    measured.exit_code,
+                    measured.metrics[0],
+                )?;
+                match validation["status"].as_str() {
+                    Some("passed") => {}
+                    Some("interrupted") => {
+                        status = "interrupted";
+                        interrupt_signal =
+                            validation["interrupt_signal"].as_i64().unwrap_or(2) as c_int;
+                    }
+                    _ => status = "validation_failed",
+                }
+            }
+        }
         error.seek(SeekFrom::Start(0))?;
         let mut preview = Vec::new();
         error.take(4096).read_to_end(&mut preview)?;
@@ -253,10 +276,13 @@ pub fn run_logged(
                   "termination": if measured.exit_code < 0 {
                       json!({"kind":"signal", "signal":-measured.exit_code, "name":signal_name(-measured.exit_code)})
                   } else { json!({"kind":"exit", "code":measured.exit_code}) },
-                  "interrupt_signal": measured.interrupt_signal,
+                  "interrupt_signal": interrupt_signal,
                   "stderr_preview": String::from_utf8_lossy(&preview)});
         if !output_check.is_null() {
             row["output_check"] = output_check;
+        }
+        if !validation.is_null() {
+            row["validation"] = validation;
         }
         {
             // Read only after measurement. Input-case reports also show successful output.
