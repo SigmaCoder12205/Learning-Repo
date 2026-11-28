@@ -9,10 +9,13 @@ use std::path::Path;
 
 const GPU_SUPERVISOR: &str = r#"
 monitor=$1; interval=$2; raw=$3; errors=$4; device=$5; shift 5
+# Without job control, POSIX shells such as dash give background commands /dev/null
+# as stdin, and `<&0` would only copy that. Keep the real stdin on fd 3 for the target.
+exec 3<&0
 if [ -n "$device" ]; then
-    "$monitor" -J -s "$interval" -d "$device" -o - > "$raw" 2> "$errors" &
+    "$monitor" -J -s "$interval" -d "$device" -o - > "$raw" 2> "$errors" 3<&- &
 else
-    "$monitor" -J -s "$interval" -o - > "$raw" 2> "$errors" &
+    "$monitor" -J -s "$interval" -o - > "$raw" 2> "$errors" 3<&- &
 fi
 monitor_pid=$!
 sleep 0.1
@@ -21,7 +24,7 @@ if ! kill -0 "$monitor_pid" 2>/dev/null; then
     printf '%s\n' "$?" > "$errors.exit"
     exit 125
 fi
-"$@" <&0 &
+"$@" <&3 3<&- &
 target_pid=$!
 printf '%s\n' "$target_pid" > "$errors.target-pid"
 wait "$target_pid"
