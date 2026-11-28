@@ -1,4 +1,10 @@
 ------------------------------------------------------------------------------------------------------------------------------------------
+Every day use commands 
+
+cd Projects/Learning-Repo/projects
+make run
+
+------------------------------------------------------------------------------------------------------------------------------------------
 
 how to take an input in C++ and assign it to a value
 where you don't know the data type
@@ -129,3 +135,16 @@ how to round a number in C++
 #include <cmath>
 
 double rounded = std::round(num); 
+------------------------------------------------------------------------------------------------------------------------------------------
+how to plus a string an an int
+
+std::string result = text + std::to_string(score);
+------------------------------------------------------------------------------------------------------------------------------------------
+how to plus always round down in cpp
+
+double result = std::floor(a + b); 
+
+------------------------------------------------------------------------------------------------------------------------------------------
+how to convert a string to a double
+
+ double value = std::stod(text);
