@@ -22,7 +22,7 @@ conflicts=('bench' 'bench-git')
 options=('!strip' '!debug')
 _archive="bench-$pkgver-x86_64-unknown-linux-musl"
 source=("https://github.com/SigmaCoder12205/Learning-Repo/releases/download/bench-v$pkgver/$_archive.tar.gz")
-sha256sums=('UPDATE_AFTER_RELEASE')
+sha256sums=('5fea42c50f5106ef61e434a9858621d8a3831781cba7632b59eb73bdf90ca06d')
 
 package() {
   cd "$_archive"

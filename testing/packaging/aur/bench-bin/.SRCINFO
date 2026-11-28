@@ -1,0 +1,27 @@
+pkgbase = bench-bin
+	pkgdesc = Benchmark native executables and Python scripts with isolated C process measurement (static binary)
+	pkgver = 0.15.0
+	pkgrel = 1
+	url = https://github.com/SigmaCoder12205/Learning-Repo/tree/main/testing
+	arch = x86_64
+	license = MIT
+	optdepends = python: benchmark Python scripts
+	optdepends = python-pandas: bench analyze and parquet export
+	optdepends = python-numpy: bench analyze
+	optdepends = python-matplotlib: bench analyze --plot
+	optdepends = python-pyarrow: parquet export
+	optdepends = perf: --perf and --hotspots
+	optdepends = valgrind: --valgrind
+	optdepends = heaptrack: --heaptrack
+	optdepends = strace: socket tracing for --networking
+	optdepends = intel-gpu-tools: --gpu
+	provides = bench=0.15.0
+	provides = cppbench
+	conflicts = bench
+	conflicts = bench-git
+	options = !strip
+	options = !debug
+	source = https://github.com/SigmaCoder12205/Learning-Repo/releases/download/bench-v0.15.0/bench-0.15.0-x86_64-unknown-linux-musl.tar.gz
+	sha256sums = 5fea42c50f5106ef61e434a9858621d8a3831781cba7632b59eb73bdf90ca06d
+
+pkgname = bench-bin
