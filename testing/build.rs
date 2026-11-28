@@ -8,11 +8,16 @@ fn main() {
     println!("cargo:rerun-if-changed=native/launcher.c");
     println!("cargo:rerun-if-changed=native/interactive.c");
     println!("cargo:rerun-if-changed=native/interactive.h");
+    println!("cargo:rerun-if-env-changed=CC");
     let helper =
         std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("bench-measure");
-    let status = cc::Build::new()
-        .get_compiler()
-        .to_command()
+    let mut command = cc::Build::new().get_compiler().to_command();
+    // The helper runs from a memfd on the user's machine. A musl release must not
+    // depend on a musl loader there, so link it statically.
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("musl") {
+        command.arg("-static");
+    }
+    let status = command
         .args([
             "-std=c11",
             "-O2",

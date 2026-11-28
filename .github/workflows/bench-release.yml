@@ -1,0 +1,64 @@
+# Publishes a GitHub release for tags named bench-vX.Y.Z (matching testing/Cargo.toml).
+name: bench release
+
+on:
+  push:
+    tags: ["bench-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: testing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the tag matches Cargo.toml
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [ "bench-v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install Rust and musl
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+          rustup toolchain install stable --profile minimal -c rustfmt,clippy --target x86_64-unknown-linux-musl
+          rustup default stable
+      - name: make verify
+        run: make verify
+      - name: Test the static musl build
+        run: cargo test --locked --target x86_64-unknown-linux-musl
+      - name: Build static archive
+        run: |
+          export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)
+          make dist DIST_TARGET=x86_64-unknown-linux-musl
+      - name: Smoke-test the archive
+        run: packaging/smoke-test.sh dist/bench-*-x86_64-unknown-linux-musl.tar.gz
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="bench-$VERSION-x86_64-unknown-linux-musl.tar.gz"
+          cat > notes.md <<NOTES
+          bench $VERSION: a static Linux x86_64 binary (musl), plus telemetry headers, guides and license.
+
+          Install into ~/.local:
+
+          \`\`\`bash
+          curl -LO https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$archive
+          curl -LO https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$archive.sha256
+          sha256sum -c $archive.sha256
+          tar -xzf $archive --strip-components=1 -C ~/.local
+          bench --version
+          \`\`\`
+
+          Arch Linux: \`yay -S bench-bin\` (this release) or \`yay -S bench-git\` (latest main).
+          The \`bench account\` commands are not in this build; build with \`make install FEATURES=accounts\`.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" "dist/$archive" "dist/$archive.sha256" \
+            --title "bench $VERSION" --notes-file notes.md --verify-tag

@@ -2,6 +2,10 @@
 
 Continuing development in a new chat? Read the [project history and handoff](HANDOFF.md) and [development guide](docs/development.md).
 
+Version **0.15** adds a structured JSON validator protocol (named checks, partial-credit scores, metric directions), regression gates on validator metrics (`--regression validator.score=2`), a Mann-Whitney rank test on every comparison, `bench compare A.json B.json` for saved reports, Parquet export, and self-contained Jupyter notebooks (`bench analyze --notebook`). See [your own checks](docs/validators.md) and [data analysis](docs/analytics.md).
+
+Version **0.14** adds custom validators written in any language (`--validate`), with their own per-run metrics. It also adds `bench history export` (one CSV/JSONL row per run and metric) and `bench analyze`, which runs pandas/numpy statistics, bootstrap intervals, change verdicts and plots. Python is needed only for `bench analyze`. See [your own checks](docs/validators.md) and [data analysis](docs/analytics.md).
+
 Version **0.13** adds inline exact/substring output assertions, full-stdout repeatability checks, and suite case listing/selection. Input-type hints and CLI validation received targeted cleanup. See [correctness and focused suites](docs/correctness.md).
 
 Version **0.12** adds inferred input types, automatic answer-once terminal capture, inline answers, and bounded stdin/argument variations with separate results. See [inputs and test cases](docs/inputs.md).
@@ -38,13 +42,27 @@ Version **0.8** replaces the local Rust account database with **Keycloak + Postg
 
 ```bash
 ./auth/scripts/setup.sh          # Requires Docker + Compose; first run downloads images
+make install FEATURES=accounts   # Account commands are an optional build feature
 bench account register       # Register in your browser and sign in
 bench account whoami
 bench account logout
 bench account login
 ```
 
-## Build and install
+## Install
+
+**Arch Linux (AUR):** `yay -S bench-bin` installs the static release binary. `yay -S bench-git` builds the latest `main` from source and runs the tests.
+
+**Any x86_64 Linux:** download the static archive from the [GitHub releases](https://github.com/SigmaCoder12205/Learning-Repo/releases?q=bench-v), check it, and unpack it into a prefix:
+
+```bash
+sha256sum -c bench-*-x86_64-unknown-linux-musl.tar.gz.sha256
+tar -xzf bench-*-x86_64-unknown-linux-musl.tar.gz --strip-components=1 -C ~/.local
+```
+
+Release builds do not include the optional `bench account` commands. Packaging and the release process are described in [packaging/README.md](packaging/README.md).
+
+## Build and install from source
 
 Requirements: Linux, Rust 1.89+ and Cargo, a C compiler (`cc`, GCC, or Clang), and a linker. A C++ compiler is only needed for source-compilation mode. Cargo downloads build dependencies on the first build; `Cargo.lock` pins their versions.
 
@@ -320,7 +338,7 @@ Every invocation starts a fresh process. Warmups are checked but excluded from s
 
 Only successful measured invocations contribute to summaries. Statistics include sample standard deviation, linearly interpolated p90/p95, and coefficient of variation (standard deviation / mean × 100). Single-sample standard deviation and zero-mean CV are zero by convention. No outliers are removed. JSON and detailed views include descriptive 95% mean bootstrap intervals (1000 deterministic resamples) and Tukey 1.5-IQR outlier counts. A single sample has no interval; adaptive stopping can affect interval coverage. Small-sample percentiles are descriptive and do not establish tail behavior.
 
-Statuses: `ok`, `timeout`, `output_limit`, `unexpected_exit`, `output_mismatch`, and `interrupted`. Failed runs retain metrics that may describe incomplete work. Stderr previews contain the first 4096 bytes. Failed invocations additionally include `stdout_preview` (up to 512 bytes), `stdout_preview_truncated`, and `captured_output` with stdout/stderr byte counts, even when `--metrics` excludes I/O. Invalid UTF-8 is replaced, and terminal previews are escaped. Previews are read after measurement; successful stdout is not added to reports. Launch/setup failures are errors, distinguished from a program that legitimately exits with code 127.
+Statuses: `ok`, `timeout`, `output_limit`, `unexpected_exit`, `output_mismatch`, `validation_failed`, and `interrupted`. Failed runs retain metrics that may describe incomplete work. Stderr previews contain the first 4096 bytes. Failed invocations additionally include `stdout_preview` (up to 512 bytes), `stdout_preview_truncated`, and `captured_output` with stdout/stderr byte counts, even when `--metrics` excludes I/O. Invalid UTF-8 is replaced, and terminal previews are escaped. Previews are read after measurement; successful stdout is not added to reports. Launch/setup failures are errors, distinguished from a program that legitimately exits with code 127.
 
 Exit codes:
 

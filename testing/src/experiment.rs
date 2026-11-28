@@ -107,6 +107,7 @@ pub fn refresh(report: &mut Value) {
     report["successful_runs"] = json!(count);
     crate::insights::refresh(report);
     crate::correctness::refresh(report);
+    crate::correctness::summarize_validation(report);
 }
 pub fn validate(args: &Cli) -> Result<(), String> {
     crate::inputs::validate(args)?;

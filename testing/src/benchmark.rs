@@ -170,12 +170,16 @@ pub(crate) fn execute(
         provenance["script_sha256"] = json!(experiment::hash_file(&python.script)?);
     }
     let setup_failed = prepared.trial.is_object() && prepared.trial["status"] != "ok";
+    let validator = crate::correctness::validator(args, &env)?;
     let opts = runner::RunOptions {
         cwd: &cwd,
         env: &env,
         input: input.as_deref(),
         expected: expected.as_deref(),
-        checks: crate::correctness::Checks::from_args(args),
+        checks: crate::correctness::Checks {
+            validator: validator.as_ref(),
+            ..crate::correctness::Checks::from_args(args)
+        },
         expected_exit: args.expect_exit,
         timeout: args.timeout,
         output_limit: args.output_limit * 1048576.0,
@@ -190,7 +194,10 @@ pub(crate) fn execute(
         "settings":{"runs":args.runs,"warmup":args.warmup,"timeout_seconds":args.timeout,"cwd":cwd,"work_units":args.units,
             "output_limit_mib":args.output_limit,"expected_exit":args.expect_exit,"input":if prepared.file.is_some(){None}else{input.as_ref()},"expected_output":expected,
             "environment_override_keys":env_keys,"cpu_affinity":affinity,"adaptive":args.adaptive,"max_runs":args.max_runs,
-            "check_output_stability":args.check_output_stability,"precision_percent":args.precision,"min_time_seconds":args.min_time,"cooldown_ms":args.cooldown_ms},
+            "check_output_stability":args.check_output_stability,
+            "validator":validator.as_ref().map(|v| json!({"command":display_command(&v.command),"timeout_seconds":v.timeout,
+                "protocol":"stdin is target stdout; exit 0 passes; `bench-metric NAME VALUE [UNIT]` stdout lines become metrics; runs outside measured time"})),
+            "precision_percent":args.precision,"min_time_seconds":args.min_time,"cooldown_ms":args.cooldown_ms},
         "output_expectations":{"exact_text":args.expect_text,"contains":args.expect_contains},
         "compilation":compilation,"custom_metrics":args.metrics.is_some(),"selected_metrics":selected.iter().map(|&i|METRICS[i].0).collect::<Vec<_>>(),
         "metric_units":selected.iter().map(|&i|(METRICS[i].0,METRICS[i].1)).collect::<BTreeMap<_,_>>(),

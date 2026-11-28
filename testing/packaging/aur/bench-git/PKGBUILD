@@ -1,0 +1,60 @@
+# Maintainer: Archer Dragone
+pkgname=bench-git
+pkgver=0.15.0.r0.g0000000
+pkgrel=1
+pkgdesc="Benchmark native executables and Python scripts with isolated C process measurement"
+arch=('x86_64' 'aarch64')
+url="https://github.com/SigmaCoder12205/Learning-Repo/tree/main/testing"
+license=('MIT')
+depends=('gcc-libs' 'glibc')
+makedepends=('cargo' 'git')
+checkdepends=('gcc' 'python')
+optdepends=('python: benchmark Python scripts'
+            'python-pandas: bench analyze and parquet export'
+            'python-numpy: bench analyze'
+            'python-matplotlib: bench analyze --plot'
+            'python-pyarrow: parquet export'
+            'perf: --perf and --hotspots'
+            'valgrind: --valgrind'
+            'heaptrack: --heaptrack'
+            'strace: socket tracing for --networking'
+            'intel-gpu-tools: --gpu')
+provides=("bench=${pkgver%%.r*}" 'cppbench')
+conflicts=('bench' 'bench-bin')
+options=('!lto')
+source=("bench::git+https://github.com/SigmaCoder12205/Learning-Repo.git#branch=main")
+sha256sums=('SKIP')
+
+_dir=bench/testing
+
+pkgver() {
+  cd "$_dir"
+  local version
+  version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+  printf '%s.r%s.g%s' "$version" "$(git rev-list --count HEAD -- .)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+  cd "$_dir"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc --print host-tuple)"
+}
+
+build() {
+  cd "$_dir"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$_dir"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$_dir"
+  make install-files PREFIX=/usr DESTDIR="$pkgdir" BIN=target/release/bench
+}

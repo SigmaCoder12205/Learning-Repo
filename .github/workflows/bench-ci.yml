@@ -1,0 +1,51 @@
+# Checks for the bench CLI in testing/. Other directories in this repository are unaffected.
+name: bench CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["testing/**", ".github/workflows/bench-*.yml"]
+  pull_request:
+    paths: ["testing/**", ".github/workflows/bench-*.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: testing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal -c rustfmt,clippy
+          rustup default stable
+      - name: make verify (fmt, clippy, C checks, tests for both feature sets)
+        run: make verify
+
+  static-build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: testing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust and musl
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends musl-tools
+          rustup toolchain install stable --profile minimal --target x86_64-unknown-linux-musl
+          rustup default stable
+      - name: Test the static musl build
+        run: cargo test --locked --target x86_64-unknown-linux-musl
+      - name: Build release archive
+        run: make dist DIST_TARGET=x86_64-unknown-linux-musl
+      - name: Smoke-test the archive
+        run: packaging/smoke-test.sh dist/bench-*-x86_64-unknown-linux-musl.tar.gz

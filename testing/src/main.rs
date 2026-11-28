@@ -1,5 +1,7 @@
 //! Executable entry point; implementation lives in focused modules.
+#[cfg(feature = "accounts")]
 mod accounts;
+mod analysis;
 mod app;
 mod benchmark;
 mod cli;

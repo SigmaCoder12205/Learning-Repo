@@ -43,18 +43,19 @@ Local Python environments named `.venv/`, bytecode files, and `__pycache__/` dir
 | `src/runtime.rs` | Bounded runtime-header detection and independent empty-script Python calibration |
 | `src/insights.rs` | Wall-time histograms, MAD spread, per-run outlier labels, and text/HTML explanations |
 | `src/history.rs` | Opt-in private report snapshots, history commands, and immutable named baseline pins |
-| `src/correctness.rs` | Streaming exact/substring output assertions, expectation hashes, measured-output repeatability, and presentation |
+| `src/correctness.rs` | Streaming exact/substring output assertions, expectation hashes, measured-output repeatability, `--validate` programs and their metrics, and presentation |
+| `src/analysis.rs`, `python/bench_analysis.py` | Long-format measurement rows for `history export`, and `bench analyze`, which runs the embedded pandas/numpy script with a user-chosen interpreter. Parquet writing via pandas, and notebook generation |
 | `src/runner.rs` | Embedded helper, sealed request transport, C FFI ownership, output capture, and correctness checks |
 | `native/launcher.c` | Fresh C helper launch, signal forwarding, and result transport (its own resource usage is discarded) |
 | `native/helper.c` | Bounded versioned request decoding in a clean C address space |
 | `native/measure.c`, `native/measure.h` | Target launch, wait4 accounting, deadlines, affinity, signals, and cleanup |
 | `src/metrics.rs` | Baseline metric IDs, units, and selection groups |
-| `src/stats.rs` | Percentiles, descriptive summaries, bootstrap intervals, and precision estimates |
+| `src/stats.rs` | Percentiles, descriptive summaries, bootstrap intervals, precision estimates, and the Mann-Whitney U test |
 | `src/experiment.rs` | Settings validation, provenance, and successful-run aggregation |
 | `src/storage.rs` | Atomic JSON writes, checkpoint append/sync, and recovery |
 | `src/accounts/{mod,browser,provider,store}.rs` | OAuth CLI commands, PKCE callback, Keycloak requests, and private refresh-token cache |
 | `src/suite.rs` | Suite parsing, preflight, sequential execution, and suite exports |
-| `src/comparison.rs` | Compatibility checks, regression thresholds, and experiment exit codes |
+| `src/comparison.rs` | Compatibility checks, regression thresholds (including directed `validator.` metrics), per-metric rank tests, `bench compare`, and experiment exit codes |
 | `src/report.rs`, `src/html.rs` | Text/CSV/JSON presentation and standalone HTML |
 | `src/diagnostics/mod.rs` | Select and sequence optional diagnostic replays |
 | `src/diagnostics/support.rs` | Tool discovery, bounded artifact reads, shared invocation/error handling |
@@ -104,6 +105,9 @@ Keep the parser independently testable. Add a small representative fixture under
 - `tests/experiments.rs` covers comparisons, suites, affinity, adaptive limits, HTML escaping, and recovery.
 - `tests/python.rs` covers Python invocation, input replay, virtual environments, failures, mixed suites, and comparison provenance.
 - `tests/correctness.rs` covers full/binary stdout assertions, buffer boundaries, repeated-output changes, warmup/stderr exclusions, per-case stability, history/recovery/HTML, expectation compatibility, suite listing/selection/preflight, and input-hint regressions. Diagnostic tests also verify assertion forwarding and auxiliary-command exemptions.
+- `tests/validators.rs` covers `--validate` in Python, shell and compiled C++, validator metrics and summaries, errors/timeouts/malformed metrics, target-failure skips, virtual-environment interpreters, and suites.
+- `tests/compare.rs` covers `bench compare`, validator regression gates and directions, rank tests in text/JSON, and live `--compare` rank tests.
+- `tests/analysis.rs` covers `history export` CSV/JSONL and `bench analyze` with a fake interpreter and a missing-pandas interpreter. Its real pandas check runs when `BENCH_TEST_PANDAS_PYTHON` (or `python3`) has pandas and numpy, and is skipped otherwise.
 - `tests/inputs.rs` covers source discovery without execution, inline stdin, variation preflight, native/Python PTY capture, EOF/signals/deadlines/output limits/descendant cleanup, diagnostic replay, matrices, history, and recovery. The Python PTY driver is test tooling, not an engine dependency.
 - `tests/features.rs` covers runtime/termination metadata, histograms, startup calibration isolation/failures/interruption, cooldowns, history privacy/pins, advisory thresholds, suites, and recovery.
 - `tests/profiles.rs` covers domain selection, telemetry, networking fixtures, profile regression gates, and the public header in C/C++.
@@ -114,7 +118,7 @@ For structural changes, preserve CLI help, the profile catalog, serialized field
 
 Keycloak owns all account/password logic; keep the Rust account module a protocol client. `auth/compose.yaml` supplies the local Keycloak/PostgreSQL services, and `auth/realm.json` seeds configuration. No password grants or admin credentials belong in the CLI. The client uses userinfo from the configured issuer rather than trusting decoded JWT claims. Offline refresh credentials are bound to that issuer and saved under private filesystem permissions. All benchmark paths stay independent of the account service.
 
-`auth/tests/smoke.py --restart` is an optional real-service check (Python standard library only, development tooling). It creates and cleans up a unique test account. Run it after `cargo build` and `./auth/scripts/setup.sh`. The service guide explains persistence, bootstrap secrets, session policy, and live-realm changes.
+`auth/tests/smoke.py --restart` is an optional real-service check (Python standard library only, development tooling). It creates and cleans up a unique test account. Run it after `cargo build --locked --features accounts` and `./auth/scripts/setup.sh`. The service guide explains persistence, bootstrap secrets, session policy, and live-realm changes.
 
 ## Measurement helper
 

@@ -39,8 +39,11 @@ pub(crate) fn run() -> Result<i32, String> {
     let mut args = Cli::from_arg_matches(&matches).map_err(|e| e.to_string())?;
     if let Some(command) = args.command.take() {
         return match command {
+            #[cfg(feature = "accounts")]
             crate::cli::Command::Account(options) => crate::accounts::run(options),
             crate::cli::Command::History(options) => crate::history::run(options),
+            crate::cli::Command::Analyze(options) => crate::analysis::run(options),
+            crate::cli::Command::Compare(options) => crate::comparison::run(options),
         };
     }
     args.profile_flags = profiles::selection(&matches);
