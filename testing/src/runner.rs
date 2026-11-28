@@ -67,7 +67,7 @@ pub(crate) fn cooldown(milliseconds: u64) -> Result<i32, String> {
         let result = loop {
             let remaining = deadline.saturating_duration_since(std::time::Instant::now());
             let timeout = libc::timespec {
-                tv_sec: remaining.as_secs() as libc::time_t,
+                tv_sec: remaining.as_secs() as _,
                 tv_nsec: remaining.subsec_nanos() as libc::c_long,
             };
             let signal = libc::sigtimedwait(&signals, std::ptr::null_mut(), &timeout);

@@ -195,6 +195,16 @@ The user asked to build the five remaining candidates from the 0.14 brainstorm. 
 - Parquet via pandas/pyarrow in `--interpreter` (`history export --format parquet --output`, `analyze --save-data`). `analyze --notebook` writes nbformat 4 with the CSV embedded as a JSON/Python string literal; no Python is needed to write it.
 - Verified: `make verify`, plus a scratch venv with pandas, pyarrow, scipy, nbclient and ipykernel. Real Parquet round trip; the notebook validated with nbformat, and all cells executed with nbclient without errors.
 
+### 18. Packaging and releases, 2026-11-28
+
+The user chose to make bench installable as step 1 of turning it into an app (2 is a PR regression Action, 3 is a `bench serve` dashboard). They asked to be told when they need to do something.
+
+- `make dist` builds a prefix-shaped tar.gz with a `.sha256` file. `make install-files` copies a built binary plus headers, guides and the new `LICENSE` (MIT, as `Cargo.toml` already declared). `install`, `dist` and the PKGBUILD all reuse it.
+- `build.rs` links the embedded helper with `-static` on musl targets.
+- Repository-root workflows (the parent repo, not `testing/`): `.github/workflows/bench-ci.yml` runs `make verify` plus a static musl archive smoke test. `bench-release.yml` runs on a `bench-vX.Y.Z` tag: it checks the tag against `Cargo.toml`, verifies, builds, smoke-tests (`packaging/smoke-test.sh`) and runs `gh release create`.
+- AUR: `packaging/aur/bench-git` was verified with `makepkg -d` against a scratch clone: tests pass in `check()` and the package contents are correct. `packaging/aur/bench-bin` needs `updpkgsums` after the first release exists. No email is in the maintainer lines; the user decides whether to publish one.
+- Not done without the user: merging to `main`, pushing a release tag, AUR account/SSH publishing, and a local musl build (needs `sudo pacman -S musl`; Docker is installed but not usable without permissions).
+
 ## Current command and report contract
 
 ```bash

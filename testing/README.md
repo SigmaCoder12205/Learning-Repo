@@ -49,7 +49,20 @@ bench account logout
 bench account login
 ```
 
-## Build and install
+## Install
+
+**Arch Linux (AUR):** `yay -S bench-bin` installs the static release binary. `yay -S bench-git` builds the latest `main` from source and runs the tests.
+
+**Any x86_64 Linux:** download the static archive from the [GitHub releases](https://github.com/SigmaCoder12205/Learning-Repo/releases?q=bench-v), check it, and unpack it into a prefix:
+
+```bash
+sha256sum -c bench-*-x86_64-unknown-linux-musl.tar.gz.sha256
+tar -xzf bench-*-x86_64-unknown-linux-musl.tar.gz --strip-components=1 -C ~/.local
+```
+
+Release builds do not include the optional `bench account` commands. Packaging and the release process are described in [packaging/README.md](packaging/README.md).
+
+## Build and install from source
 
 Requirements: Linux, Rust 1.89+ and Cargo, a C compiler (`cc`, GCC, or Clang), and a linker. A C++ compiler is only needed for source-compilation mode. Cargo downloads build dependencies on the first build; `Cargo.lock` pins their versions.
 
