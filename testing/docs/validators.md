@@ -25,16 +25,43 @@ bench ./sorter --validate build/check_sorted
 | `BENCH_TARGET_WALL_SECONDS` | The run's measured wall time |
 | Environment and working directory | The same as the target's, including `--env` and `--cwd` |
 | Exit status | `0` passes the run. Any other exit fails it |
-| stdout `bench-metric NAME VALUE [UNIT]` | Records a numeric metric for that run |
+| stdout `bench-metric NAME VALUE [UNIT] [higher\|lower]` | Records a numeric metric for that run. The optional last word declares which direction is better |
+| stdout JSON object with `"bench_validator": 1` | The structured protocol below |
 | Other stdout lines | Shown as the failure message (the first 1 KiB is kept) |
 
 Metric names use 1 to 64 letters, digits, `_`, `-` or `.`. Values must be finite numbers. A validator may report up to 32 metrics per run, each at most once. The unit is one optional word.
+
+## Structured JSON protocol
+
+For named checks, partial credit, or metric directions, print one JSON object instead:
+
+```json
+{"bench_validator": 1,
+ "passed": true,
+ "score": 0.75,
+ "message": "3 of 4 answers correct",
+ "checks": [{"name": "has_total", "passed": true},
+            {"name": "sorted", "passed": false, "message": "row 7 out of order", "score": 0.5}],
+ "metrics": {"tokens": {"value": 412, "unit": "count", "better": "lower"},
+             "rows": 1000}}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `bench_validator` | Required. Must be `1` |
+| `passed` | Optional. When present, it decides the verdict, so partial credit can pass. When absent, every check must pass |
+| `score` | Optional partial credit from 0 to 1. It is recorded as the metric `score`, where higher is better |
+| `checks` | Up to 64 named checks with `passed`, plus an optional `message` and `score`. `validation_checks` counts passes and failures per check across measured runs |
+| `metrics` | A number, or `{"value", "unit", "better"}`. `better` is `"higher"` or `"lower"` |
+| `message` | Shown when the run fails |
+
+A nonzero exit still fails the run. Unknown fields, a bad version, a score outside 0 to 1, duplicate names, and a metric named `score` next to a top-level `score` are validator errors. Output that is JSON but lacks `bench_validator` is treated as a plain message.
 
 ## Results
 
 A failing check gives the run status `validation_failed`, and bench exits with code 1, like other output checks. Each checked run has a `validation` object: `status` (`passed`, `failed`, `error` or `interrupted`), `exit_code`, `wall_seconds`, `metrics`, `metric_units`, `message` and `stderr_preview`. The status `error` means the validator broke rather than the target. Examples are a timeout, a crash, or a malformed metric line, and `reason` says which.
 
-`validation_metrics` summarizes each metric over successful measured runs, with count, mean, median, min, max, standard deviation and percentiles. Text and HTML reports list these summaries and each failed check. `settings.validator` records the command and timeout. `bench history export` and `bench analyze` include validator metrics with kind `validator` (see [data analysis](analytics.md)).
+`validation_metrics` summarizes each metric over successful measured runs, with count, mean, median, min, max, standard deviation, percentiles, and the declared `better` direction. A JSON-protocol run also records `protocol`, `passed`, `score`, `checks` and `failed_checks`. Text and HTML reports list these summaries and each failed check. `settings.validator` records the command and timeout. `bench history export` and `bench analyze` include validator metrics with kind `validator` (see [data analysis](analytics.md)).
 
 The validator only runs when the target itself succeeded. A timeout, output limit, unexpected exit, or `--expect-*` mismatch keeps its own status. A failed warmup stops the experiment before measured runs. Ctrl-C during a validator interrupts the experiment as usual.
 
@@ -59,4 +86,13 @@ In suites, `validate` is a string or an array `[program, arg...]`. A relative pr
 
 - Validators add work between runs and may change cache state, like other between-run checks. Measured time never includes them.
 - They run once per successful run, including warmups. They do not run for compilation, Python startup calibration, or the unmeasured input-capture trial.
-- Comparisons and `--regression` thresholds do not yet use validator metrics. Use `bench analyze` to track them over time.
+## Regression gates on validator metrics
+
+`--compare`, `--compare-pin` and `bench compare` compare validator metrics (their medians) whenever both reports have them. Gates use the `validator.` prefix:
+
+```bash
+bench ./model --validate ./grade.py --compare before.json --regression validator.score=2
+bench compare before.json after.json --regression validator.loss:lower=5 --warn-regression validator.tokens:lower=10
+```
+
+A gate needs a direction: the `:higher` or `:lower` suffix, or a `better` declared by the validator. The suffix wins if both are given. A gate on a metric with no direction makes the comparison incompatible (exit 2) rather than guessing. If the validator command itself changed, the comparison lists that as a difference.

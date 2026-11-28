@@ -11,6 +11,8 @@ pub(crate) enum Command {
     History(crate::history::Options),
     /// Statistics over saved reports with pandas and numpy (Python needed only here)
     Analyze(crate::analysis::Options),
+    /// Compare two saved reports with thresholds and a rank test, without running anything
+    Compare(crate::comparison::Options),
 }
 fn positive(s: &str) -> Result<f64, String> {
     let n: f64 = s.parse().map_err(|_| "expected a number")?;

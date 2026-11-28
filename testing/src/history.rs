@@ -42,8 +42,8 @@ enum Action {
     Pin { id: String, name: String },
     /// Export measured runs as one row per run and metric, for pandas, R or spreadsheets
     Export {
-        /// csv (header row) or jsonl (one JSON object per line)
-        #[arg(long, default_value = "csv", value_parser = ["csv", "jsonl"])]
+        /// csv (header row), jsonl (one JSON object per line), or parquet (needs --output, pandas and pyarrow)
+        #[arg(long, default_value = "csv", value_parser = ["csv", "jsonl", "parquet"])]
         format: String,
         /// Newest saved runs to include
         #[arg(long, default_value = "50", value_parser = clap::value_parser!(u32).range(1..=1000))]
@@ -51,6 +51,9 @@ enum Action {
         /// Write to a file instead of stdout
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Python with pandas and pyarrow, for --format parquet
+        #[arg(long, value_name = "PATH", default_value = "python3")]
+        interpreter: PathBuf,
     },
 }
 
@@ -266,15 +269,18 @@ pub(crate) fn run(options: Options) -> Result<i32, String> {
             format,
             limit,
             output,
+            interpreter,
         } => {
+            if format == "parquet" && output.is_none() {
+                return Err("--format parquet needs --output FILE.parquet".into());
+            }
             let rows: Vec<Value> = newest(&root, limit as usize)?
                 .iter()
                 .flat_map(|(id, report)| crate::analysis::tidy(report, id))
                 .collect();
-            let text = crate::analysis::render(&rows, &format);
             match output {
-                Some(path) => fs::write(&path, text).map_err(|e| e.to_string())?,
-                None => print!("{text}"),
+                Some(path) => crate::analysis::write_data(&rows, &path, &format, &interpreter)?,
+                None => print!("{}", crate::analysis::render(&rows, &format)),
             }
         }
         Action::List { limit, pins } => {

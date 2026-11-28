@@ -219,3 +219,121 @@ fn analyze_with_real_pandas_when_available() {
         .iter()
         .any(|r| r["metric"] == "wall" && r["sources"] == 2));
 }
+
+#[test]
+fn notebook_and_saved_data_need_no_python() {
+    let dir = private_dir();
+    let report = dir.path().join("report.json");
+    let output = bench(&[
+        "/bin/echo",
+        "--runs",
+        "2",
+        "--warmup",
+        "0",
+        "--name",
+        "quote\"d",
+        "--format",
+        "json",
+        "--output",
+        report.to_str().unwrap(),
+        "--",
+        "x",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let book = dir.path().join("book.ipynb");
+    let data = dir.path().join("rows.jsonl");
+    let output = bench(&[
+        "analyze",
+        report.to_str().unwrap(),
+        "--notebook",
+        book.to_str().unwrap(),
+        "--save-data",
+        data.to_str().unwrap(),
+        "--interpreter",
+        "/nonexistent/python",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let notebook: Value = serde_json::from_slice(&fs::read(&book).unwrap()).unwrap();
+    assert_eq!(notebook["nbformat"], 4);
+    assert!(notebook["cells"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|c| c["id"].is_string()));
+    let rows = fs::read_to_string(&data).unwrap();
+    assert!(rows
+        .lines()
+        .all(|l| serde_json::from_str::<Value>(l).unwrap()["case"] == "quote\"d"));
+    assert!(notebook["cells"][1]["source"]
+        .as_str()
+        .unwrap()
+        .contains(r#"\"quote\"\"d\""#)); // CSV-quoted, then JSON-escaped
+    let output = bench(&["analyze", report.to_str().unwrap(), "--save-data", "x.txt"]);
+    assert!(String::from_utf8_lossy(&output.stderr).contains(".csv, .jsonl or .parquet"));
+    let output = bench(&[
+        "analyze",
+        report.to_str().unwrap(),
+        "--notebook",
+        "b.ipynb",
+        "--plot",
+        "p.png",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn parquet_export_uses_pandas_and_explains_missing_packages() {
+    let dir = private_dir();
+    let history = dir.path().join("history");
+    record(&history, "p");
+    let history = history.to_str().unwrap();
+    let output = bench(&["history", "--dir", history, "export", "--format", "parquet"]);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("needs --output"));
+    let target = dir.path().join("runs.parquet");
+    let bare = dir.path().join("bare-python");
+    fs::write(&bare, "#!/bin/sh\nexec python3 -S \"$@\"\n").unwrap();
+    fs::set_permissions(&bare, fs::Permissions::from_mode(0o755)).unwrap();
+    let output = bench(&[
+        "history",
+        "--dir",
+        history,
+        "export",
+        "--format",
+        "parquet",
+        "--output",
+        target.to_str().unwrap(),
+        "--interpreter",
+        bare.to_str().unwrap(),
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("needs pandas and pyarrow"));
+
+    let Some(python) = pandas_python().filter(|p| {
+        Command::new(p)
+            .args(["-c", "import pyarrow"])
+            .status()
+            .is_ok_and(|s| s.success())
+    }) else {
+        eprintln!("skipping parquet round trip: no interpreter with pandas and pyarrow");
+        return;
+    };
+    let output = bench(&[
+        "history",
+        "--dir",
+        history,
+        "export",
+        "--format",
+        "parquet",
+        "--output",
+        target.to_str().unwrap(),
+        "--interpreter",
+        &python,
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let check = Command::new(&python)
+        .args(["-c", "import sys, pandas as pd; d = pd.read_parquet(sys.argv[1]); assert str(d['run'].dtype) == 'Int64' and str(d['value'].dtype) == 'float64'; assert (d['kind'] == 'validator').sum() == 3; print(len(d))"])
+        .arg(&target)
+        .output()
+        .unwrap();
+    assert!(check.status.success(), "{check:?}");
+}

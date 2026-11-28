@@ -57,8 +57,8 @@ Updated 2026-11-28. The user asked for checks written in any language and for pa
 | Long-format export (`bench history export`) | Delivered | CSV/JSONL, one row per measured run and metric, oldest history first, for pandas, R or DuckDB. |
 | `bench analyze` with pandas/numpy | Delivered | Embedded script with a user-chosen interpreter. Medians, bootstrap intervals, outliers, oldest-to-newest change verdicts, optional matplotlib plot. |
 | pandas/numpy workload example | Delivered | `examples/analytics_workload.py`, with a validator for its answer. |
-| Regression gates on validator metrics | Future candidate | `--regression validator.NAME=PCT` needs a direction (higher or lower is better) per metric. |
-| Parquet/Arrow export | Future candidate | Would add a large dependency. CSV/JSONL cover pandas today. |
-| Notebook export | Future candidate | Generate a Jupyter notebook preloaded with a run's data and plots. |
-| Rank-based A/B test in Rust | Future candidate | Mann-Whitney or permutation test for two reports without Python. |
-| JSON validator protocol | Future candidate | Structured verdicts, multiple named checks per run, and partial credit. |
+| Regression gates on validator metrics | Delivered in 0.15 | `--regression validator.NAME[:higher\|lower]=PCT`, with the direction from the suffix or declared by the validator. A gate without a direction is incompatible, never guessed. |
+| Parquet export | Delivered in 0.15 | `history export --format parquet` and `analyze --save-data FILE.parquet`, written by pandas/pyarrow in the chosen interpreter. No Arrow code in the binary. |
+| Notebook export | Delivered in 0.15 | `analyze --notebook FILE.ipynb`: a self-contained nbformat 4 notebook with embedded data. Writing it needs no Python, and every cell was executed with nbclient during verification. |
+| Rank-based A/B test in Rust | Delivered in 0.15 | Mann-Whitney U, exact or normal with tie correction, on every comparison, plus `bench compare A.json B.json`. Checked against scipy. |
+| JSON validator protocol | Delivered in 0.15 | `{"bench_validator": 1, ...}` with an explicit verdict, partial-credit `score`, named checks with pass-rate summaries, and metric directions. The line protocol also gained `[higher\|lower]`. |

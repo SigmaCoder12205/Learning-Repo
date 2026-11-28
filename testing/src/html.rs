@@ -171,16 +171,20 @@ fn section(report: &Value) -> String {
             "<h3>Baseline comparison: {}</h3>",
             escape(report["comparison"]["status"].as_str().unwrap_or("unknown"))
         );
-        out.push_str("<table><thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Change</th><th>Regression</th></tr></thead><tbody>");
+        out.push_str("<table><thead><tr><th>Metric</th><th>Baseline</th><th>Current</th><th>Change</th><th>Rank test p</th><th>Regression</th></tr></thead><tbody>");
         if let Some(changes) = report["comparison"]["changes"].as_array() {
             for change in changes {
                 let _ = write!(
                     out,
-                    "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td class={}>{}</td></tr>",
+                    "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td class={}>{}</td></tr>",
                     escape(change["metric"].as_str().unwrap_or("")),
                     change["baseline"],
                     change["current"],
                     number(&change["change_percent"], 1., "%"),
+                    change["rank_test"]["p_value"]
+                        .as_f64()
+                        .map(|p| format!("{p:.3}"))
+                        .unwrap_or_else(|| "—".into()),
                     if change["regression"] == true {
                         "bad"
                     } else {

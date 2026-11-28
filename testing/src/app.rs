@@ -43,6 +43,7 @@ pub(crate) fn run() -> Result<i32, String> {
             crate::cli::Command::Account(options) => crate::accounts::run(options),
             crate::cli::Command::History(options) => crate::history::run(options),
             crate::cli::Command::Analyze(options) => crate::analysis::run(options),
+            crate::cli::Command::Compare(options) => crate::comparison::run(options),
         };
     }
     args.profile_flags = profiles::selection(&matches);

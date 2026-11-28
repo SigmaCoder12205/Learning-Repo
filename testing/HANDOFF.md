@@ -8,7 +8,7 @@ This document combines the available conversation history with the checked-in im
 
 - Project: **bench**, formerly **cppbench**, a Linux CLI for benchmarking native executables and Python scripts.
 - Checkout: `/home/ddogflyer/Projects/general-coding/testing`, inside the larger `general-coding` Git repository (previously `/home/arch/Projects/Learning-Repo/testing`).
-- Current package version: **0.14.0** (history item 16). Installation was not rerun for 0.14. The engine remains **Rust + C**; Python is a supported workload, not a replacement implementation.
+- Current package version: **0.15.0** (history items 16 and 17). Installation was not rerun for 0.14 or 0.15. The engine remains **Rust + C**; Python is a supported workload, not a replacement implementation.
 - Main command: `bench ./program` or `bench script.py`. Default report is simple; `--intermediate` and `--advanced` add detail.
 - Installation: `~/.local/bin/bench`; `~/.local/bin/cppbench` is a compatibility symlink to `bench`.
 - Account authority: local **Keycloak + PostgreSQL**, not a Rust password database. Benchmarks do not require login or Docker.
@@ -183,6 +183,17 @@ The user asked for a brainstorm, then implementation of: checks users write in a
 - Examples: `examples/validators/` (Python, shell, C++, analytics check), `examples/analytics_workload.py`, `examples/requirements-analytics.txt`.
 - Report schema stays version 3. The changes are additive: `settings.validator`, per-run `validation`, `validation_metrics`, and the new status value.
 - Verified: `make verify` passes, and the tests do not need pandas. The real pandas path was checked with a scratch venv (pandas 3.1.1, numpy 2.5.5, matplotlib) via `BENCH_TEST_PANDAS_PYTHON`, plus manual runs of analyze/plot, the analytics workload, and Ctrl-C during a validator (exit 130).
+
+### 17. The other five brainstorm features in 0.15, 2026-11-28
+
+The user asked to build the five remaining candidates from the 0.14 brainstorm. The work continues on branch `bench-0.14-validators-analytics`, which was not yet merged into `main`.
+
+- JSON validator protocol (`"bench_validator": 1`): an explicit `passed` verdict decides (partial credit can pass), otherwise all named checks must pass. `score` (0..1) becomes metric `score` with direction higher. Checks are summarized in `validation_checks`. Metric directions are stored as `validation_metrics.NAME.better`. The line protocol accepts a trailing `higher|lower`. Malformed JSON verdicts are validator errors.
+- Validator regression gates: `validator.NAME[:higher|lower]=PCT`, also for `--warn-regression`. Without a direction, a gate makes the comparison incompatible. A changed validator command is a comparison difference. Percent change uses `|baseline|`, so negative validator values work.
+- `stats::mann_whitney`: exact distribution by dynamic programming (no ties, n1·n2 ≤ 400), otherwise normal with tie and continuity corrections. It is attached as `rank_test` to every comparison change that has run samples, and shown in text and HTML. Values were checked against scipy 1.x in unit tests.
+- `bench compare BASELINE CURRENT` reuses `comparison::apply`, has text/JSON output, and uses the normal exit codes. `report::render_comparison` was extracted for reuse.
+- Parquet via pandas/pyarrow in `--interpreter` (`history export --format parquet --output`, `analyze --save-data`). `analyze --notebook` writes nbformat 4 with the CSV embedded as a JSON/Python string literal; no Python is needed to write it.
+- Verified: `make verify`, plus a scratch venv with pandas, pyarrow, scipy, nbclient and ipykernel. Real Parquet round trip; the notebook validated with nbformat, and all cells executed with nbclient without errors.
 
 ## Current command and report contract
 

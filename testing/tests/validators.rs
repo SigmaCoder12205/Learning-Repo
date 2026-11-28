@@ -146,7 +146,7 @@ fn validator_errors_timeouts_and_skips_are_reported() {
         (
             "bad.sh",
             "#!/bin/sh\necho 'bench-metric bad! 1'\n",
-            "malformed metric line",
+            "invalid metric \"bad!\"",
         ),
         (
             "nan.sh",
@@ -286,4 +286,204 @@ fn suites_accept_validator_commands() {
     let output = bench(&["--suite", suite.to_str().unwrap(), "--list-cases"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("benchmark x: --validate"));
+}
+
+#[test]
+fn json_protocol_reports_checks_scores_and_directions() {
+    let dir = tempfile::tempdir().unwrap();
+    // Grades `echo` output: one check per expected word, partial credit as score.
+    let grader = script(
+        dir.path(),
+        "grade.py",
+        r#"#!/usr/bin/env python3
+import json, os, sys
+words = sys.stdin.read().split()
+want = ["a", "b", "c", "d"]
+checks = [{"name": "has_" + w, "passed": w in words, "message": "" if w in words else "missing " + w} for w in want]
+doc = {"bench_validator": 1, "score": sum(c["passed"] for c in checks) / 4, "checks": checks,
+       "metrics": {"words": {"value": len(words), "unit": "count", "better": "lower"}, "raw": 2}}
+if os.environ.get("PASS_AT"):
+    doc["passed"] = doc["score"] >= float(os.environ["PASS_AT"])
+print(json.dumps(doc))
+"#,
+    );
+    let run = |words: &str, extra: &[&str]| {
+        let mut args = vec![
+            "/bin/echo",
+            "--runs",
+            "2",
+            "--warmup",
+            "0",
+            "--validate",
+            &grader,
+            "--format",
+            "json",
+        ];
+        args.extend(extra);
+        args.extend(["--", words]);
+        bench(&args)
+    };
+    let full = run("a b c d", &[]);
+    assert!(full.status.success(), "{full:?}");
+    let report = data(&full);
+    let validation = &report["runs"][0]["validation"];
+    assert_eq!(validation["protocol"], "json");
+    assert_eq!(validation["score"], 1.0);
+    assert_eq!(validation["metric_better"]["words"], "lower");
+    assert_eq!(report["validation_metrics"]["score"]["better"], "higher");
+    assert_eq!(report["validation_metrics"]["words"]["unit"], "count");
+    assert!(report["validation_metrics"]["raw"]["better"].is_null());
+    assert_eq!(report["validation_checks"]["has_d"]["pass_rate"], 1.0);
+
+    // Without "passed", any failed check fails the run, and the text names it.
+    let partial = run("a b c", &[]);
+    assert_eq!(partial.status.code(), Some(1));
+    let report = data(&partial);
+    assert_eq!(report["runs"][0]["status"], "validation_failed");
+    assert_eq!(
+        report["runs"][0]["validation"]["failed_checks"],
+        serde_json::json!(["has_d"])
+    );
+    // The first failing run stops the experiment (no --keep-going).
+    assert_eq!(report["validation_checks"]["has_d"]["failed"], 1);
+    let text = bench(&[
+        "/bin/echo",
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+        "--validate",
+        &grader,
+        "--",
+        "a b c",
+    ]);
+    let text = String::from_utf8(text.stdout).unwrap();
+    assert!(text.contains("failed checks: has_d"), "{text}");
+    assert!(text.contains("has_d: 0 passed, 1 failed"), "{text}");
+
+    // An explicit "passed" decides: partial credit can pass.
+    let lenient = run("a b c", &["--env", "PASS_AT=0.7"]);
+    assert!(lenient.status.success(), "{lenient:?}");
+    assert_eq!(
+        data(&lenient)["validation_metrics"]["score"]["median"],
+        0.75
+    );
+
+    let bad_cases = [
+        (
+            r#"{"bench_validator": 2}"#,
+            "unsupported bench_validator version",
+        ),
+        (
+            r#"{"bench_validator": 1, "extra": 1}"#,
+            "unknown validator JSON field",
+        ),
+        (
+            r#"{"bench_validator": 1, "score": 1.5}"#,
+            "score must be a number from 0 to 1",
+        ),
+        (
+            r#"{"bench_validator": 1, "checks": [{"name": "x"}]}"#,
+            "needs \"passed\"",
+        ),
+        (
+            r#"{"bench_validator": 1, "checks": [{"name": "x", "passed": true}, {"name": "x", "passed": true}]}"#,
+            "more than once",
+        ),
+        (
+            r#"{"bench_validator": 1, "metrics": {"m": {"value": 1, "better": "up"}}}"#,
+            "better must be",
+        ),
+        (
+            r#"{"bench_validator": 1, "score": 0.5, "metrics": {"score": 1}}"#,
+            "conflicts with the top-level score",
+        ),
+    ];
+    for (index, (body, reason)) in bad_cases.iter().enumerate() {
+        let bad = script(
+            dir.path(),
+            &format!("bad{index}.sh"),
+            &format!("#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\n"),
+        );
+        let output = bench(&[
+            "/bin/true",
+            "--runs",
+            "1",
+            "--warmup",
+            "0",
+            "--validate",
+            &bad,
+            "--format",
+            "json",
+        ]);
+        let validation = &data(&output)["runs"][0]["validation"];
+        assert_eq!(validation["status"], "error", "{body}");
+        assert!(
+            validation["reason"].as_str().unwrap().contains(reason),
+            "{body}: {validation}"
+        );
+    }
+
+    // JSON-looking output without the marker key stays a plain message.
+    let plain = script(dir.path(), "plain.sh", "#!/bin/sh\necho '{\"note\": 1}'\n");
+    let output = bench(&[
+        "/bin/true",
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+        "--validate",
+        &plain,
+        "--format",
+        "json",
+    ]);
+    assert_eq!(
+        data(&output)["runs"][0]["validation"]["message"],
+        "{\"note\": 1}\n"
+    );
+}
+
+#[test]
+fn line_protocol_accepts_a_direction() {
+    let dir = tempfile::tempdir().unwrap();
+    let validator = script(
+        dir.path(),
+        "dir.sh",
+        "#!/bin/sh\necho 'bench-metric acc 0.9 higher'\necho 'bench-metric loss 2 nats lower'\necho 'bench-metric size 3 B'\n",
+    );
+    let output = bench(&[
+        "/bin/true",
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+        "--validate",
+        &validator,
+        "--format",
+        "json",
+    ]);
+    assert!(output.status.success(), "{output:?}");
+    let metrics = &data(&output)["validation_metrics"];
+    assert_eq!(metrics["acc"]["better"], "higher");
+    assert_eq!(metrics["acc"]["unit"], "");
+    assert_eq!(metrics["loss"]["better"], "lower");
+    assert_eq!(metrics["loss"]["unit"], "nats");
+    assert!(metrics["size"]["better"].is_null());
+    let bad = script(
+        dir.path(),
+        "bad.sh",
+        "#!/bin/sh\necho 'bench-metric x 1 B higher extra'\n",
+    );
+    let output = bench(&[
+        "/bin/true",
+        "--runs",
+        "1",
+        "--warmup",
+        "0",
+        "--validate",
+        &bad,
+        "--format",
+        "json",
+    ]);
+    assert_eq!(data(&output)["runs"][0]["validation"]["status"], "error");
 }

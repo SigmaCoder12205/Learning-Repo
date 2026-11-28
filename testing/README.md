@@ -2,6 +2,8 @@
 
 Continuing development in a new chat? Read the [project history and handoff](HANDOFF.md) and [development guide](docs/development.md).
 
+Version **0.15** adds a structured JSON validator protocol (named checks, partial-credit scores, metric directions), regression gates on validator metrics (`--regression validator.score=2`), a Mann-Whitney rank test on every comparison, `bench compare A.json B.json` for saved reports, Parquet export, and self-contained Jupyter notebooks (`bench analyze --notebook`). See [your own checks](docs/validators.md) and [data analysis](docs/analytics.md).
+
 Version **0.14** adds custom validators written in any language (`--validate`), with their own per-run metrics. It also adds `bench history export` (one CSV/JSONL row per run and metric) and `bench analyze`, which runs pandas/numpy statistics, bootstrap intervals, change verdicts and plots. Python is needed only for `bench analyze`. See [your own checks](docs/validators.md) and [data analysis](docs/analytics.md).
 
 Version **0.13** adds inline exact/substring output assertions, full-stdout repeatability checks, and suite case listing/selection. Input-type hints and CLI validation received targeted cleanup. See [correctness and focused suites](docs/correctness.md).

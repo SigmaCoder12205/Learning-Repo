@@ -10,6 +10,8 @@ bench history export > runs.csv           # newest 50 saved runs, oldest first
 bench history export --format jsonl --limit 200 --output runs.jsonl
 ```
 
+`--format parquet --output runs.parquet` writes typed Parquet (nullable integer `run` and `recorded_unix_seconds`, float `value`). Parquet goes through pandas and pyarrow in `--interpreter` (default `python3`), so the binary carries no Arrow code. If they are missing, bench prints install instructions and exits with code 2.
+
 The columns are `source,recorded_unix_seconds,case,run,status,kind,metric,unit,value`:
 
 - `source` is the history ID, or the report file name for `bench analyze`.
@@ -51,10 +53,31 @@ bench flattens the reports to the table above. It then runs its embedded `bench_
 | `--plot FILE.png` | Box plot of wall time per case and source. Needs matplotlib |
 | `--interpreter PATH` | A Python with pandas and numpy. Virtual environments work |
 | `--output FILE` | Write the analysis to a file |
+| `--save-data FILE` | Also save the measurement table as `.csv`, `.jsonl` or `.parquet` (Parquet needs pyarrow) |
+| `--notebook FILE.ipynb` | Write a Jupyter notebook instead of running the analysis (see below) |
 
 If pandas or numpy is missing, the script prints install commands and bench exits with code 2. Bootstrap intervals use a fixed seed, so repeating an analysis gives the same numbers. They need at least three runs per group. A "change" is statistical evidence about these samples, not proof of a cause, and machine load still matters.
 
 You can also run the script directly on an export: save `python/bench_analysis.py` from this repository, then run `python3 bench_analysis.py runs.csv`.
+
+## Jupyter notebooks
+
+```bash
+bench analyze before.json after.json --notebook results.ipynb
+jupyter lab results.ipynb
+```
+
+The notebook embeds the measurement table, so it works on its own when shared, and writing it needs no Python. It has cells that load the data into pandas, summarize per case and metric, show medians per source in recording order, box-plot wall time (if matplotlib is installed), and tabulate validator metrics. Everything is plain pandas code you can edit. The embedded data is limited to 16 MiB; use `--limit` or `--save-data` for more.
+
+## Statistical comparison without Python
+
+`bench compare BASELINE.json CURRENT.json` compares two saved reports without running anything. It applies the same compatibility checks and `--regression`/`--warn-regression` gates as `--compare`, with the same exit codes. Every comparison, including live `--compare` and `--compare-pin` runs, now adds a **Mann-Whitney U rank test** to each metric that has per-run samples (wall, cpu, rss, throughput, validator metrics):
+
+- `p_value` is two-sided. It is exact for small samples without ties, and otherwise uses a normal approximation with tie and continuity corrections. Results were checked against scipy.
+- `probability_current_lower` is the chance that a random current run is lower than a random baseline run (ties count one half). 0.5 means no difference.
+- Text reports show `rank test p=…`, marked `(significant)` below 0.05. HTML has a column for it.
+
+The rank test is evidence, not a gate: thresholds still decide exit code 3. It assumes independent runs, so drift during one experiment can mislead it.
 
 ## Benchmarking pandas and numpy code
 

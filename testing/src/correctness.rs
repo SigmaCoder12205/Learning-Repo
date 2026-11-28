@@ -3,7 +3,7 @@ use crate::cli::Cli;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     fs::File,
     io::{self, Read, Seek, SeekFrom},
@@ -86,46 +86,199 @@ fn valid_metric_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.'))
 }
 
-/// Parse validator stdout: `bench-metric NAME VALUE [UNIT]` lines become custom
-/// metrics; every other line is part of the human-readable message.
-fn parse_validator_output(text: &str) -> Result<(Value, Value, String), String> {
-    let mut metrics = serde_json::Map::new();
-    let mut units = serde_json::Map::new();
-    let mut message = String::new();
-    for line in text.lines() {
-        let mut fields = line.split_whitespace();
-        if fields.next() != Some("bench-metric") {
-            if !line.trim().is_empty() {
-                message.push_str(line.trim_end());
-                message.push('\n');
-            }
-            continue;
+/// What a validator said, from either protocol.
+#[derive(Default)]
+struct Verdict {
+    metrics: serde_json::Map<String, Value>,
+    units: serde_json::Map<String, Value>,
+    /// Declared improvement direction per metric: "higher" or "lower".
+    better: serde_json::Map<String, Value>,
+    message: String,
+    /// JSON protocol only: explicit verdict, partial-credit score and named checks.
+    passed: Option<bool>,
+    score: Option<f64>,
+    checks: Vec<Value>,
+}
+impl Verdict {
+    fn metric(
+        &mut self,
+        name: &str,
+        value: f64,
+        unit: &str,
+        better: Option<&str>,
+    ) -> Result<(), String> {
+        if !valid_metric_name(name) || unit.len() > 32 || unit.contains(char::is_whitespace) {
+            return Err(format!("invalid metric {name:?}; names use 1..64 letters, digits, '_', '-' or '.', and units are one word"));
         }
-        let (Some(name), Some(value)) = (fields.next(), fields.next()) else {
-            return Err(format!(
-                "malformed metric line {line:?}; expected `bench-metric NAME VALUE [UNIT]`"
-            ));
-        };
-        let unit = fields.next().unwrap_or("");
-        if fields.next().is_some() || !valid_metric_name(name) || unit.len() > 32 {
-            return Err(format!("malformed metric line {line:?}; names use 1..64 letters, digits, '_', '-' or '.', and units are one word"));
+        if !value.is_finite() {
+            return Err(format!("metric {name} needs a finite number, got {value}"));
         }
-        let value: f64 = value
-            .parse()
-            .ok()
-            .filter(|v: &f64| v.is_finite())
-            .ok_or_else(|| format!("metric {name} needs a finite number, got {value:?}"))?;
-        if metrics.insert(name.into(), json!(value)).is_some() {
+        if self.metrics.insert(name.into(), json!(value)).is_some() {
             return Err(format!("metric {name} was reported more than once"));
         }
-        if metrics.len() > MAX_VALIDATOR_METRICS {
+        if self.metrics.len() > MAX_VALIDATOR_METRICS {
             return Err(format!(
                 "validators may report at most {MAX_VALIDATOR_METRICS} metrics"
             ));
         }
-        units.insert(name.into(), json!(unit));
+        self.units.insert(name.into(), json!(unit));
+        if let Some(better) = better {
+            self.better.insert(name.into(), json!(better));
+        }
+        Ok(())
     }
-    Ok((Value::Object(metrics), Value::Object(units), message))
+}
+
+/// Parse validator stdout. A JSON object with `"bench_validator": 1` uses the JSON
+/// protocol; otherwise `bench-metric NAME VALUE [UNIT] [higher|lower]` lines become
+/// metrics and every other line is part of the human-readable message.
+fn parse_validator_output(text: &str) -> Result<Verdict, String> {
+    let trimmed = text.trim();
+    if trimmed.starts_with('{') {
+        if let Ok(doc) = serde_json::from_str::<Value>(trimmed) {
+            if !doc["bench_validator"].is_null() {
+                return parse_json_verdict(&doc);
+            }
+        }
+    }
+    let mut verdict = Verdict::default();
+    for line in text.lines() {
+        let mut fields = line.split_whitespace();
+        if fields.next() != Some("bench-metric") {
+            if !line.trim().is_empty() {
+                verdict.message.push_str(line.trim_end());
+                verdict.message.push('\n');
+            }
+            continue;
+        }
+        let rest: Vec<&str> = fields.collect();
+        let malformed = || {
+            format!("malformed metric line {line:?}; expected `bench-metric NAME VALUE [UNIT] [higher|lower]`")
+        };
+        let (name, value, mut extra) = match rest.as_slice() {
+            [name, value, extra @ ..] if extra.len() <= 2 => (*name, *value, extra.to_vec()),
+            _ => return Err(malformed()),
+        };
+        let better = match extra.last() {
+            Some(&d) if d == "higher" || d == "lower" => {
+                extra.pop();
+                Some(d)
+            }
+            _ => None,
+        };
+        if extra.len() > 1 {
+            return Err(malformed());
+        }
+        let parsed: f64 = value
+            .parse()
+            .map_err(|_| format!("metric {name} needs a finite number, got {value:?}"))?;
+        verdict.metric(name, parsed, extra.first().copied().unwrap_or(""), better)?;
+    }
+    Ok(verdict)
+}
+
+const MAX_CHECKS: usize = 64;
+
+fn parse_json_verdict(doc: &Value) -> Result<Verdict, String> {
+    let object = doc.as_object().ok_or("validator JSON must be an object")?;
+    if doc["bench_validator"] != 1 {
+        return Err("unsupported bench_validator version; use 1".into());
+    }
+    for key in object.keys() {
+        if ![
+            "bench_validator",
+            "passed",
+            "score",
+            "message",
+            "checks",
+            "metrics",
+        ]
+        .contains(&key.as_str())
+        {
+            return Err(format!("unknown validator JSON field {key:?}"));
+        }
+    }
+    let mut verdict = Verdict::default();
+    let text = |value: &Value, what: &str| -> Result<String, String> {
+        match value {
+            Value::Null => Ok(String::new()),
+            Value::String(s) => Ok(s.clone()),
+            _ => Err(format!("{what} must be a string")),
+        }
+    };
+    verdict.message = text(&doc["message"], "message")?;
+    verdict.passed = match &doc["passed"] {
+        Value::Null => None,
+        Value::Bool(b) => Some(*b),
+        _ => return Err("passed must be true or false".into()),
+    };
+    let score = |value: &Value, what: &str| -> Result<Option<f64>, String> {
+        if value.is_null() {
+            return Ok(None);
+        }
+        value
+            .as_f64()
+            .filter(|v| (0.0..=1.0).contains(v))
+            .map(Some)
+            .ok_or_else(|| format!("{what} must be a number from 0 to 1"))
+    };
+    verdict.score = score(&doc["score"], "score")?;
+    if let Some(checks) = doc.get("checks") {
+        let checks = checks.as_array().ok_or("checks must be an array")?;
+        if checks.len() > MAX_CHECKS {
+            return Err(format!("validators may report at most {MAX_CHECKS} checks"));
+        }
+        let mut names = BTreeSet::new();
+        for check in checks {
+            let name = check["name"]
+                .as_str()
+                .filter(|n| valid_metric_name(n))
+                .ok_or("every check needs a name of 1..64 letters, digits, '_', '-' or '.'")?;
+            if !names.insert(name) {
+                return Err(format!("check {name} was reported more than once"));
+            }
+            let passed = check["passed"]
+                .as_bool()
+                .ok_or_else(|| format!("check {name} needs \"passed\": true or false"))?;
+            let message = text(&check["message"], "check message")?;
+            let check_score = score(&check["score"], "check score")?;
+            verdict
+                .checks
+                .push(json!({"name":name,"passed":passed,"message":message,"score":check_score}));
+        }
+    }
+    if let Some(metrics) = doc.get("metrics") {
+        for (name, value) in metrics.as_object().ok_or("metrics must be an object")? {
+            let (number, unit, better) = match value {
+                Value::Number(n) => (n.as_f64(), String::new(), None),
+                Value::Object(spec) => (
+                    spec.get("value").and_then(Value::as_f64),
+                    text(spec.get("unit").unwrap_or(&Value::Null), "unit")?,
+                    match spec.get("better") {
+                        None | Some(Value::Null) => None,
+                        Some(Value::String(d)) if d == "higher" || d == "lower" => Some(d.clone()),
+                        _ => {
+                            return Err(format!(
+                                "metric {name}: better must be \"higher\" or \"lower\""
+                            ))
+                        }
+                    },
+                ),
+                _ => (None, String::new(), None),
+            };
+            let number = number
+                .ok_or_else(|| format!("metric {name} needs a number or {{\"value\": number}}"))?;
+            verdict.metric(name, number, &unit, better.as_deref())?;
+        }
+    }
+    if let Some(score) = verdict.score {
+        // Partial credit is summarized and comparable like any other metric.
+        if verdict.metrics.contains_key("score") {
+            return Err("metric \"score\" conflicts with the top-level score".into());
+        }
+        verdict.metric("score", score, "", Some("higher"))?;
+    }
+    Ok(verdict)
 }
 
 /// Run the user's validator outside measured time. Its stdin is the target's full stdout.
@@ -195,18 +348,39 @@ pub(crate) fn run_validator(
     };
     result["status"] = json!(status);
     match parse_validator_output(&text) {
-        Ok((metrics, units, mut message)) => {
-            if message.len() > 1024 {
+        Ok(mut verdict) => {
+            if verdict.message.len() > 1024 {
                 // Cut at a UTF-8 boundary (floor_char_boundary needs a newer Rust than 1.89).
                 let cut = (0..=1024)
                     .rev()
-                    .find(|&i| message.is_char_boundary(i))
+                    .find(|&i| verdict.message.is_char_boundary(i))
                     .unwrap_or(0);
-                message.truncate(cut);
+                verdict.message.truncate(cut);
             }
-            result["metrics"] = metrics;
-            result["metric_units"] = units;
-            result["message"] = json!(message);
+            let failed_checks: Vec<_> = verdict
+                .checks
+                .iter()
+                .filter(|c| c["passed"] == false)
+                .map(|c| c["name"].clone())
+                .collect();
+            // An explicit "passed" decides (partial credit); otherwise every check must pass.
+            let rejected = verdict.passed.map_or(!failed_checks.is_empty(), |p| !p);
+            if status == "passed" && rejected {
+                result["status"] = json!("failed");
+            }
+            result["metrics"] = Value::Object(verdict.metrics);
+            result["metric_units"] = Value::Object(verdict.units);
+            result["message"] = json!(verdict.message);
+            if !verdict.better.is_empty() {
+                result["metric_better"] = Value::Object(verdict.better);
+            }
+            if verdict.passed.is_some() || verdict.score.is_some() || !verdict.checks.is_empty() {
+                result["protocol"] = json!("json");
+                result["passed"] = json!(verdict.passed);
+                result["score"] = json!(verdict.score);
+                result["checks"] = json!(verdict.checks);
+                result["failed_checks"] = json!(failed_checks);
+            }
         }
         Err(reason) if status == "passed" => {
             result["status"] = json!("error");
@@ -217,19 +391,29 @@ pub(crate) fn run_validator(
     Ok(result)
 }
 
-/// Summarize validator metrics across successful measured runs.
+/// Summarize validator metrics and named checks across measured runs.
 pub(crate) fn summarize_validation(report: &mut Value) {
     if !report["settings"]["validator"].is_object() {
         return;
     }
-    let mut values: BTreeMap<String, (String, Vec<f64>)> = BTreeMap::new();
-    for row in report["runs"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|r| r["status"] == "ok")
-    {
+    let mut values: BTreeMap<String, (String, Value, Vec<f64>)> = BTreeMap::new();
+    let mut checks: BTreeMap<String, (u64, u64)> = BTreeMap::new();
+    for row in report["runs"].as_array().into_iter().flatten() {
         let validation = &row["validation"];
+        // Check pass rates include failing runs: that is where checks fail.
+        for check in validation["checks"].as_array().into_iter().flatten() {
+            if let Some(name) = check["name"].as_str() {
+                let entry = checks.entry(name.to_string()).or_default();
+                if check["passed"] == true {
+                    entry.0 += 1;
+                } else {
+                    entry.1 += 1;
+                }
+            }
+        }
+        if row["status"] != "ok" {
+            continue;
+        }
         for (name, value) in validation["metrics"].as_object().into_iter().flatten() {
             if let Some(value) = value.as_f64() {
                 let entry = values.entry(name.clone()).or_insert_with(|| {
@@ -238,22 +422,37 @@ pub(crate) fn summarize_validation(report: &mut Value) {
                             .as_str()
                             .unwrap_or("")
                             .to_string(),
+                        validation["metric_better"][name].clone(),
                         Vec::new(),
                     )
                 });
-                entry.1.push(value);
+                entry.2.push(value);
             }
         }
     }
     let summary: serde_json::Map<_, _> = values
         .into_iter()
-        .map(|(name, (unit, samples))| {
+        .map(|(name, (unit, better, samples))| {
             let mut stats = crate::stats::summarize_basic(samples);
             stats["unit"] = json!(unit);
+            stats["better"] = better;
             (name, stats)
         })
         .collect();
     report["validation_metrics"] = Value::Object(summary);
+    if !checks.is_empty() {
+        report["validation_checks"] = checks
+            .into_iter()
+            .map(|(name, (passed, failed))| {
+                (
+                    name,
+                    json!({"passed":passed,"failed":failed,
+                    "pass_rate":passed as f64 / (passed + failed) as f64}),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>()
+            .into();
+    }
 }
 
 pub(crate) fn validate(args: &Cli) -> Result<(), String> {
@@ -479,6 +678,16 @@ pub(crate) fn render(report: &Value) -> String {
             );
         }
     }
+    if let Some(checks) = report["validation_checks"].as_object() {
+        out.push_str("Validator checks (measured runs):\n");
+        for (name, counts) in checks {
+            let _ = writeln!(
+                out,
+                "  {name}: {} passed, {} failed",
+                counts["passed"], counts["failed"]
+            );
+        }
+    }
     for phase in ["warmups", "runs"] {
         for row in report[phase]
             .as_array()
@@ -496,6 +705,13 @@ pub(crate) fn render(report: &Value) -> String {
             );
             if let Some(reason) = validation["reason"].as_str() {
                 let _ = write!(out, "; {reason}");
+            }
+            if let Some(failed) = validation["failed_checks"]
+                .as_array()
+                .filter(|f| !f.is_empty())
+            {
+                let names: Vec<_> = failed.iter().filter_map(Value::as_str).collect();
+                let _ = write!(out, "; failed checks: {}", names.join(", "));
             }
             let message = validation["message"].as_str().unwrap_or("").trim();
             let stderr = validation["stderr_preview"].as_str().unwrap_or("").trim();

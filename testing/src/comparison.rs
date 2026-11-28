@@ -1,5 +1,78 @@
 use serde_json::{json, Value};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
+
+/// Compare two saved reports without running anything (pure Rust, no Python).
+#[derive(clap::Args, Debug, Clone)]
+pub(crate) struct Options {
+    /// The earlier report (e.g. from --save-baseline or --format json --output)
+    baseline: PathBuf,
+    /// The later report to judge against the baseline
+    current: PathBuf,
+    /// Allowed worsening, e.g. --regression wall=5 --regression validator.score:higher=2
+    #[arg(long)]
+    regression: Vec<String>,
+    /// Warn on worsening without exit code 3
+    #[arg(long)]
+    warn_regression: Vec<String>,
+    /// Compare despite different workloads/hosts (differences remain visible)
+    #[arg(long)]
+    allow_mismatch: bool,
+    #[arg(long, default_value = "text", value_parser = ["text", "json"])]
+    format: String,
+}
+
+pub(crate) fn run(options: Options) -> Result<i32, String> {
+    let baseline = load(&options.baseline)?;
+    let mut current = load(&options.current)?;
+    let limits = thresholds(&options.regression)?;
+    let warnings = thresholds(&options.warn_regression)?;
+    apply(&mut current, &baseline, &limits, options.allow_mismatch);
+    if !warnings.is_empty() {
+        apply_warnings(&mut current, &baseline, &warnings, options.allow_mismatch);
+    }
+    let mut cases = vec![("", &current)];
+    if let Some(list) = current["cases"].as_array() {
+        cases = list
+            .iter()
+            .map(|c| (c["name"].as_str().unwrap_or(""), c))
+            .collect();
+    }
+    if options.format == "json" {
+        let per_case: Vec<_> = cases
+            .iter()
+            .map(|(name, case)| json!({"name":name,"comparison":case["comparison"]}))
+            .collect();
+        let out = json!({"kind":"report_comparison","baseline":options.baseline,"current":options.current,
+            "status":current["comparison"]["status"],"exit_code":exit_code(&current),
+            "comparison":current["comparison"],"cases":if current["cases"].is_array() {json!(per_case)} else {Value::Null}});
+        println!("{}", serde_json::to_string_pretty(&out).unwrap());
+    } else {
+        println!(
+            "bench compare | {} -> {}",
+            options.baseline.display(),
+            options.current.display()
+        );
+        if current["cases"].is_array() {
+            println!(
+                "Suite comparison: {}",
+                current["comparison"]["status"]
+                    .as_str()
+                    .unwrap_or("unknown")
+            );
+        }
+        for (name, case) in cases {
+            if !name.is_empty() {
+                print!("\nCase {name}:");
+            }
+            print!("{}", crate::report::render_comparison(case));
+        }
+    }
+    Ok(exit_code(&current))
+}
 
 pub fn load(path: &Path) -> Result<Value, String> {
     let data = fs::read(path).map_err(|e| format!("baseline {}: {e}", path.display()))?;
@@ -19,7 +92,14 @@ pub fn thresholds(values: &[String]) -> Result<BTreeMap<String, f64>, String> {
         let (name, value) = arg
             .split_once('=')
             .ok_or("regression must be METRIC=PERCENT")?;
-        if !crate::metrics::METRICS.iter().any(|m| m.0 == name)
+        if let Some(rest) = name.strip_prefix("validator.") {
+            let (metric, direction) = rest.split_once(':').unwrap_or((rest, ""));
+            if metric.is_empty() || !["", "higher", "lower"].contains(&direction) {
+                return Err(format!(
+                    "{name}: use validator.NAME, validator.NAME:higher or validator.NAME:lower"
+                ));
+            }
+        } else if !crate::metrics::METRICS.iter().any(|m| m.0 == name)
             && !["allocations", "heap_peak", "leaked_bytes"].contains(&name)
             && crate::profiles::metric(name).is_none()
         {
@@ -42,7 +122,33 @@ pub fn thresholds(values: &[String]) -> Result<BTreeMap<String, f64>, String> {
     }
     Ok(result)
 }
+/// `validator.NAME[:higher|lower]` split into the metric and an explicit direction.
+fn validator_key(key: &str) -> Option<(&str, Option<bool>)> {
+    let rest = key.strip_prefix("validator.")?;
+    Some(match rest.split_once(':') {
+        Some((name, direction)) => (name, Some(direction == "higher")),
+        None => (rest, None),
+    })
+}
+/// Per-run samples behind a summary, for the rank test; empty when there are none.
+fn samples(report: &Value, name: &str) -> Vec<f64> {
+    let runs = report["runs"].as_array().into_iter().flatten();
+    let ok = runs.filter(|r| r["status"] == "ok");
+    if let Some((metric, _)) = validator_key(name) {
+        ok.filter_map(|r| r["validation"]["metrics"][metric].as_f64())
+            .collect()
+    } else if crate::metrics::METRICS.iter().any(|m| m.0 == name) {
+        ok.filter_map(|r| r["metrics"][name].as_f64()).collect()
+    } else {
+        Vec::new()
+    }
+}
 fn metric(report: &Value, name: &str) -> Option<f64> {
+    if let Some((metric, _)) = validator_key(name) {
+        return report["validation_metrics"][metric]["median"]
+            .as_f64()
+            .filter(|v| v.is_finite());
+    }
     if let Some(spec) = crate::profiles::metric(name) {
         let value = &report["profiles"]["metrics"][name];
         if value["status"] != "ok" {
@@ -126,6 +232,9 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
             "output expectations differ (older baselines may lack expectation hashes)".into(),
         );
     }
+    if current["settings"]["validator"]["command"] != baseline["settings"]["validator"]["command"] {
+        differences.push("validator command differs".into());
+    }
     if current["settings"]["check_output_stability"]
         .as_bool()
         .unwrap_or(false)
@@ -163,16 +272,48 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
     .into_iter()
     .map(str::to_string)
     .collect();
-    for name in limits.keys() {
-        if !names.contains(name) {
-            names.push(name.clone());
+    // Validator metrics are compared when both sides have them; thresholds may add a direction.
+    let mut directions = BTreeMap::new();
+    for key in limits.keys() {
+        let name = match validator_key(key) {
+            Some((metric, direction)) => {
+                if let Some(higher) = direction {
+                    directions.insert(format!("validator.{metric}"), higher);
+                }
+                format!("validator.{metric}")
+            }
+            None => key.clone(),
+        };
+        if !names.contains(&name) {
+            names.push(name);
         }
     }
+    for metric in current["validation_metrics"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(k, _)| k)
+    {
+        let name = format!("validator.{metric}");
+        if baseline["validation_metrics"][metric].is_object() && !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let limit_for = |name: &str| {
+        limits
+            .iter()
+            .find(|(key, _)| {
+                key.as_str() == name
+                    || validator_key(key).is_some_and(|(m, _)| format!("validator.{m}") == name)
+            })
+            .map(|(_, limit)| *limit)
+    };
     let mut changes = Vec::new();
     let mut missing = Vec::new();
     for name in names {
+        let limit = limit_for(&name);
         let (Some(before), Some(after)) = (metric(baseline, &name), metric(current, &name)) else {
-            if limits.contains_key(&name) {
+            if limit.is_some() {
                 missing.push(name);
             }
             continue;
@@ -184,23 +325,57 @@ fn single(current: &Value, baseline: &Value, limits: &BTreeMap<String, f64>, all
                 None
             }
         } else {
-            Some((after - before) / before * 100.)
+            Some((after - before) / before.abs() * 100.)
         };
-        let higher_better = name == "throughput";
+        // Built-in metrics have fixed directions; validator metrics need a declared one.
+        let direction = if let Some((metric, _)) = validator_key(&name) {
+            let declared = |r: &Value| match r["validation_metrics"][metric]["better"].as_str() {
+                Some("higher") => Some(true),
+                Some("lower") => Some(false),
+                _ => None,
+            };
+            if let (Some(a), Some(b)) = (declared(current), declared(baseline)) {
+                if a != b {
+                    differences.push(format!("{name} declared direction differs"));
+                }
+            }
+            directions
+                .get(&name)
+                .copied()
+                .or_else(|| declared(current))
+                .or_else(|| declared(baseline))
+        } else {
+            Some(name == "throughput")
+        };
+        if direction.is_none() && limit.is_some() {
+            invalid = true;
+            differences.push(format!(
+                "{name} has no declared direction; use --regression {name}:higher=PCT or :lower=PCT, or declare \"better\" in the validator"
+            ));
+        }
+        let higher_better = direction.unwrap_or(false);
         if crate::profiles::metric(&name).is_some()
             && baseline["profiles"]["metrics"][&name]["source"]
                 != current["profiles"]["metrics"][&name]["source"]
         {
             differences.push(format!("{name} measurement source differs"));
         }
-        let worsening = change.map(|p| if higher_better { -p } else { p });
-        let regression = limits.get(&name).is_some_and(|limit| {
-            worsening
-                .map(|p| p > *limit)
-                .unwrap_or(!higher_better && after > 0.)
-        });
+        let worsening = direction.and(change.map(|p| if higher_better { -p } else { p }));
+        let regression = direction.is_some()
+            && limit.is_some_and(|limit| {
+                worsening
+                    .map(|p| p > limit)
+                    .unwrap_or(!higher_better && after > 0.)
+            });
+        let (now, before_samples) = (samples(current, &name), samples(baseline, &name));
+        let rank_test = if now.is_empty() || before_samples.is_empty() {
+            Value::Null
+        } else {
+            crate::stats::mann_whitney(&now, &before_samples)
+        };
         changes.push(json!({"metric":name,"baseline":before,"current":after,"change_percent":change,
-            "worsening_percent":worsening,"higher_is_better":higher_better,"threshold_percent":limits.get(&name),"regression":regression,
+            "worsening_percent":worsening,"higher_is_better":direction,"threshold_percent":limit,"regression":regression,
+            "rank_test":rank_test,
             "statistic":if crate::profiles::metric(&name).is_some() {"p95 samples from a single diagnostic replay"}else if name=="rss" {"maximum peak RSS"}else if ["allocations","heap_peak","leaked_bytes"].contains(&name.as_str()) {"single diagnostic replay"}else{"median"}}));
     }
     for name in missing {
@@ -332,6 +507,76 @@ mod tests {
             single(&current, &current, &BTreeMap::new(), false)["status"],
             "incompatible"
         );
+    }
+    #[test]
+    fn validator_thresholds_need_a_direction() {
+        let with = |median: f64, better: Value| {
+            let mut r = report(1., 100.);
+            r["validation_metrics"] = json!({"accuracy":{"median":median,"better":better}});
+            r
+        };
+        let declared = thresholds(&["validator.accuracy=1".into()]).unwrap();
+        let result = single(
+            &with(0.9, json!("higher")),
+            &with(0.95, json!("higher")),
+            &declared,
+            false,
+        );
+        assert_eq!(result["status"], "regression");
+        let change = &result["changes"][2];
+        assert_eq!(change["metric"], "validator.accuracy");
+        assert_eq!(change["higher_is_better"], true);
+        // Undeclared: informational without a threshold, incompatible with one.
+        let undeclared = single(
+            &with(0.9, Value::Null),
+            &with(0.95, Value::Null),
+            &BTreeMap::new(),
+            false,
+        );
+        assert_eq!(undeclared["status"], "ok");
+        assert!(undeclared["changes"][2]["higher_is_better"].is_null());
+        assert_eq!(
+            single(
+                &with(0.9, Value::Null),
+                &with(0.95, Value::Null),
+                &declared,
+                false
+            )["status"],
+            "incompatible"
+        );
+        // The flag's direction wins; lower-is-better makes the drop an improvement.
+        let lower = thresholds(&["validator.accuracy:lower=1".into()]).unwrap();
+        assert_eq!(
+            single(
+                &with(0.9, Value::Null),
+                &with(0.95, Value::Null),
+                &lower,
+                false
+            )["status"],
+            "ok"
+        );
+        assert!(thresholds(&["validator.x:up=1".into()]).is_err());
+        assert!(thresholds(&["validator.=1".into()]).is_err());
+    }
+    #[test]
+    fn changes_include_rank_tests_from_run_samples() {
+        let with_runs = |walls: &[f64]| {
+            let mut r = report(walls[walls.len() / 2], 100.);
+            r["runs"] = walls
+                .iter()
+                .map(|w| json!({"status":"ok","metrics":{"wall":w}}))
+                .collect();
+            r
+        };
+        let result = single(
+            &with_runs(&[2., 2.1, 2.2, 2.3, 2.4]),
+            &with_runs(&[1., 1.1, 1.2, 1.3, 1.4]),
+            &BTreeMap::new(),
+            false,
+        );
+        let test = &result["changes"][0]["rank_test"];
+        assert_eq!(test["significant_at_0_05"], true);
+        assert_eq!(test["probability_current_lower"], 0.0);
     }
     #[test]
     fn changed_suite_membership_is_incompatible() {

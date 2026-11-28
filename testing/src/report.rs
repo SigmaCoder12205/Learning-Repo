@@ -380,41 +380,7 @@ pub fn render(
     out.push_str(&crate::correctness::render(report));
     render_diagnostics(&mut out, report, view);
     out.push_str(&crate::profiles::render(report, view != View::Simple));
-    if report["comparison"].is_object() {
-        let _ = writeln!(
-            out,
-            "\nBaseline comparison: {}",
-            report["comparison"]["status"].as_str().unwrap_or("unknown")
-        );
-        if let Some(changes) = report["comparison"]["changes"].as_array() {
-            for change in changes {
-                let percent = change["change_percent"]
-                    .as_f64()
-                    .map(|n| format!("{n:+.2}%"))
-                    .unwrap_or_else(|| "undefined (zero baseline)".into());
-                let _ = writeln!(
-                    out,
-                    "  {}: {} -> {} ({percent}); {}{}",
-                    change["metric"].as_str().unwrap_or(""),
-                    change["baseline"],
-                    change["current"],
-                    change["statistic"].as_str().unwrap_or(""),
-                    if change["regression"] == true {
-                        "; REGRESSION"
-                    } else {
-                        ""
-                    }
-                );
-            }
-        }
-        for key in ["differences", "warnings"] {
-            if let Some(messages) = report["comparison"][key].as_array() {
-                for message in messages {
-                    let _ = writeln!(out, "  Note: {}", message);
-                }
-            }
-        }
-    }
+    out.push_str(&render_comparison(report));
     if view == View::Simple {
         out.push_str("More detail: --intermediate (resource ranges) or --advanced (full statistics and runs).\n");
     }
@@ -568,6 +534,54 @@ fn render_diagnostics(out: &mut String, report: &Value, view: View) {
     if let Some(dir) = report["diagnostics"]["artifact_directory"].as_str() {
         let _ = writeln!(out, "Artifacts: {dir:?} (including diagnostics.json)");
     }
+}
+
+/// Text for a `comparison` object; empty when the report was not compared.
+pub(crate) fn render_comparison(report: &Value) -> String {
+    let mut out = String::new();
+    if report["comparison"].is_object() {
+        let _ = writeln!(
+            out,
+            "\nBaseline comparison: {}",
+            report["comparison"]["status"].as_str().unwrap_or("unknown")
+        );
+        if let Some(changes) = report["comparison"]["changes"].as_array() {
+            for change in changes {
+                let percent = change["change_percent"]
+                    .as_f64()
+                    .map(|n| format!("{n:+.2}%"))
+                    .unwrap_or_else(|| "undefined (zero baseline)".into());
+                let rank = match change["rank_test"]["p_value"].as_f64() {
+                    Some(p) => format!(
+                        "; rank test p={p:.3}{}",
+                        if p < 0.05 { " (significant)" } else { "" }
+                    ),
+                    None => String::new(),
+                };
+                let _ = writeln!(
+                    out,
+                    "  {}: {} -> {} ({percent}); {}{rank}{}",
+                    change["metric"].as_str().unwrap_or(""),
+                    change["baseline"],
+                    change["current"],
+                    change["statistic"].as_str().unwrap_or(""),
+                    if change["regression"] == true {
+                        "; REGRESSION"
+                    } else {
+                        ""
+                    }
+                );
+            }
+        }
+        for key in ["differences", "warnings"] {
+            if let Some(messages) = report["comparison"][key].as_array() {
+                for message in messages {
+                    let _ = writeln!(out, "  Note: {}", message);
+                }
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
