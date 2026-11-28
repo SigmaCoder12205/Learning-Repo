@@ -51,7 +51,12 @@ bench account login
 
 ## Install
 
-**Arch Linux (AUR):** `yay -S bench-bin` installs the static release binary. `yay -S bench-git` builds the latest `main` from source and runs the tests.
+**Arch Linux:** the packages are not on the AUR yet. Build one from this repository with makepkg: `bench-git` builds the latest `main` from source and runs the tests.
+
+```bash
+git clone https://github.com/SigmaCoder12205/Learning-Repo.git
+cd Learning-Repo/testing/packaging/aur/bench-git && makepkg -si
+```
 
 **Any x86_64 Linux:** download the static archive from the [GitHub releases](https://github.com/SigmaCoder12205/Learning-Repo/releases?q=bench-v), check it, and unpack it into a prefix:
 

@@ -57,7 +57,7 @@ jobs:
           bench --version
           \`\`\`
 
-          Arch Linux: \`yay -S bench-bin\` (this release) or \`yay -S bench-git\` (latest main).
+          Arch Linux: build the package with \`makepkg -si\` in \`testing/packaging/aur/bench-git\` (AUR packages are not published yet).
           The \`bench account\` commands are not in this build; build with \`make install FEATURES=accounts\`.
           NOTES
           gh release create "$GITHUB_REF_NAME" "dist/$archive" "dist/$archive.sha256" \

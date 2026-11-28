@@ -30,4 +30,6 @@ On musl targets, `build.rs` links the embedded C measurement helper with `-stati
 
 ## Publishing to the AUR
 
+Not published yet: AUR account registration was paused on 2026-11-28 (announced on aur-general and the Arch news feed). Until then, install with `makepkg -si` from `aur/bench-git`. Once the packages are published, switch the README and release notes back to `yay -S bench-bin` / `yay -S bench-git`.
+
 AUR packages live in their own Git repositories (`ssh://aur@aur.archlinux.org/bench-git.git`). Copy `PKGBUILD` and `.SRCINFO` there, then commit and push. This needs an AUR account with your SSH public key. Test first with `makepkg -si` or a clean chroot (`extra-x86_64-build` from devtools).

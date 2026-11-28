@@ -203,7 +203,8 @@ The user chose to make bench installable as step 1 of turning it into an app (2 
 - `build.rs` links the embedded helper with `-static` on musl targets.
 - Repository-root workflows (the parent repo, not `testing/`): `.github/workflows/bench-ci.yml` runs `make verify` plus a static musl archive smoke test. `bench-release.yml` runs on a `bench-vX.Y.Z` tag: it checks the tag against `Cargo.toml`, verifies, builds, smoke-tests (`packaging/smoke-test.sh`) and runs `gh release create`.
 - AUR: `packaging/aur/bench-git` was verified with `makepkg -d` against a scratch clone: tests pass in `check()` and the package contents are correct. `packaging/aur/bench-bin` needs `updpkgsums` after the first release exists. No email is in the maintainer lines; the user decides whether to publish one.
-- Not done without the user: merging to `main`, pushing a release tag, AUR account/SSH publishing, and a local musl build (needs `sudo pacman -S musl`; Docker is installed but not usable without permissions).
+- Merged to `main` (with a fix CI found: the `--gpu` supervisor lost target stdin under dash). AUR registration was paused on 2026-11-28, so the README and release notes point to `makepkg -si` until the packages are published.
+- Not done without the user: pushing the release tag (the permission classifier blocks it for Claude), AUR account/SSH publishing, and a local musl build (needs `sudo pacman -S musl`; Docker is installed but not usable without permissions).
 
 ## Current command and report contract
 
